@@ -1,0 +1,226 @@
+<mxfile host="app.diagrams.net" modified="2026-05-31T13:00:00.000Z" agent="GPT-5.3-Codex" version="24.7.17" type="device">
+  <diagram id="d0" name="00-Overview-UML">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="p1" value="&lt;&lt;layer&gt;&gt;&#xa;Gateway / Entrada" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="360" height="200" as="geometry"/>
+        </mxCell>
+        <mxCell id="p1a" value="&lt;&lt;service&gt;&gt; WebhooksService" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="p1">
+          <mxGeometry x="20" y="45" width="150" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p1b" value="&lt;&lt;service&gt;&gt; InboundService" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="p1">
+          <mxGeometry x="190" y="45" width="150" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="p2" value="&lt;&lt;layer&gt;&gt;&#xa;Orquestacion IA (ms-ai)" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="120" width="420" height="200" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2a" value="&lt;&lt;service&gt;&gt; AiProcessService" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="p2">
+          <mxGeometry x="25" y="45" width="170" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2b" value="&lt;&lt;service&gt;&gt; AiInterpreterService" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="p2">
+          <mxGeometry x="220" y="45" width="170" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="p3" value="&lt;&lt;layer&gt;&gt;&#xa;Dominio Reclamo (ms-reclamos)" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="940" y="120" width="390" height="200" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3a" value="&lt;&lt;service&gt;&gt; ReclamosService" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="p3">
+          <mxGeometry x="25" y="45" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3b" value="&lt;&lt;entity&gt;&gt; Reclamo" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="p3">
+          <mxGeometry x="210" y="45" width="150" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="p4" value="&lt;&lt;layer&gt;&gt;&#xa;Infraestructura" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="120" width="330" height="200" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4a" value="&lt;&lt;infra&gt;&gt; ClientProxy(NATS)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="p4">
+          <mxGeometry x="20" y="45" width="140" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4b" value="&lt;&lt;infra&gt;&gt; RedisService" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="p4">
+          <mxGeometry x="170" y="45" width="140" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="oe1" value="uses" style="endArrow=block;html=1;" edge="1" parent="1" source="p1b" target="p2a"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="oe2" value="creates" style="endArrow=block;html=1;" edge="1" parent="1" source="p2a" target="p3a"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="oe3" value="depends" style="endArrow=block;html=1;" edge="1" parent="1" source="p1b" target="p4a"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="oe4" value="depends" style="endArrow=block;html=1;" edge="1" parent="1" source="p2a" target="p4a"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="d1" name="01-Gateway-UML-Detallado">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="g1" value="&lt;&lt;service&gt;&gt; WebhooksService&#xa;--------------------------------&#xa;+ verifyMetaWhatsappWebhook(mode:string,token:string,challenge:string): string&#xa;+ receiveMetaWhatsappWebhook(payload:Record&lt;string,unknown&gt;, rawBody?:Buffer, signature?:string): Promise&lt;object&gt;&#xa;- extractInboundMessages(payload:MetaWhatsappWebhookPayload): CreateInboundMessageDto[]&#xa;- mapMetaMessageToInbound(...): CreateInboundMessageDto" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="50" y="60" width="470" height="270" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="g2" value="&lt;&lt;service&gt;&gt; InboundService&#xa;--------------------------------&#xa;- idempotencyTtlSeconds: number&#xa;- contextTtlSeconds: number&#xa;+ receiveMessage(payload:CreateInboundMessageDto): Promise&lt;object&gt;&#xa;+ getContext(contactKey:string): Promise&lt;object|null&gt;&#xa;- scheduleDebounce(payload:SanitizedInboundMessage): void&#xa;- consolidateAndDispatch(contactKey:string,lastPayload:SanitizedInboundMessage): Promise&lt;void&gt;&#xa;- isDuplicateMessage(payload:SanitizedInboundMessage): Promise&lt;boolean&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="560" y="60" width="520" height="300" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="g3" value="&lt;&lt;dto&gt;&gt; CreateInboundMessageDto&#xa;--------------------------------&#xa;+ channel: ChannelType&#xa;+ channelIdentity: ChannelIdentityDto&#xa;+ externalMessageId?: string&#xa;+ messageText: string&#xa;+ receivedAt?: string&#xa;+ responseWindow: ResponseWindowDto&#xa;+ metadata?: Record&lt;string,unknown&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="50" y="390" width="360" height="220" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="g4" value="&lt;&lt;dto&gt;&gt; AiInboundPayloadDto&#xa;--------------------------------&#xa;+ correlationId: UUIDv4&#xa;+ contactKey: string&#xa;+ channel: ChannelType&#xa;+ channelIdentity: ChannelIdentityDto&#xa;+ consolidatedText: string&#xa;+ messageCount: int&#xa;+ messages: MessageRecordDto[]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="450" y="390" width="340" height="220" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="g5" value="&lt;&lt;infra&gt;&gt; RedisService" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="90" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="g6" value="&lt;&lt;infra&gt;&gt; ClientProxy&#xa;(NATS_CLIENT)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="190" width="220" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="g7" value="&lt;&lt;infra&gt;&gt; WhatsappService" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="300" width="220" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ge1" value="1 uses 1" style="endArrow=block;html=1;" edge="1" parent="1" source="g1" target="g2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ge2" value="maps" style="endArrow=block;html=1;" edge="1" parent="1" source="g1" target="g3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ge3" value="builds" style="endArrow=block;html=1;" edge="1" parent="1" source="g2" target="g4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ge4" value="1..1" style="endArrow=diamondThin;html=1;" edge="1" parent="1" source="g2" target="g5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ge5" value="1..1 send()" style="endArrow=diamondThin;html=1;" edge="1" parent="1" source="g2" target="g6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ge6" value="1..1" style="endArrow=diamondThin;html=1;" edge="1" parent="1" source="g2" target="g7"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="d2" name="02-Orquestacion-IA-UML-Detallado">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="a1" value="&lt;&lt;service&gt;&gt; AiProcessService&#xa;--------------------------------&#xa;+ processInboundMessage(payload:AiInboundPayloadDto): Promise&lt;object&gt;&#xa;- createClaim(payload:AiInboundPayloadDto,state:ConversationState): Promise&lt;CreateResult&gt;&#xa;- geocodeAddress(payload:AiInboundPayloadDto,address:string): Promise&lt;GeocodeResponse&gt;&#xa;- getConversationState(contactKey:string): Promise&lt;ConversationState|null&gt;&#xa;- saveConversationState(state:ConversationState): Promise&lt;void&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="60" y="50" width="540" height="290" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="a2" value="&lt;&lt;service&gt;&gt; AiInterpreterService&#xa;--------------------------------&#xa;+ parseClaimText(input:string,clientId:string): Promise&lt;ParsedClaimData&gt;&#xa;- parseWithFallback(input:string): ParsedClaimData&#xa;- callOpenaiWithTimeout(input:string): Promise&lt;Completion&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="650" y="50" width="460" height="220" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="a3" value="&lt;&lt;service&gt;&gt; AiSecurityService&#xa;--------------------------------&#xa;+ checkRateLimit(clientId:string): Promise&lt;boolean&gt;&#xa;+ validateAndSanitizeInput(input:string,clientId?:string): string" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="50" width="380" height="160" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="a4" value="&lt;&lt;entity&gt;&gt; ConversationState&#xa;--------------------------------&#xa;+ contactKey: string&#xa;+ phase: 'collecting_claim_data' | 'closed'&#xa;+ greeted: boolean&#xa;+ correo?: string&#xa;+ dni?: string&#xa;+ problema?: string&#xa;+ direccion?: string&#xa;+ categoria?: ClaimCategoria&#xa;+ prioridad?: ClaimPrioridad&#xa;+ mensajes: MensajeEntry[]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="60" y="390" width="420" height="320" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="a5" value="&lt;&lt;dto&gt;&gt; AiInboundPayloadDto" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="530" y="390" width="250" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="a6" value="&lt;&lt;dto&gt;&gt; GeocodeAddressDto" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="820" y="390" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="a7" value="&lt;&lt;dto&gt;&gt; CreateReclamoDto" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="390" width="220" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="a8" value="&lt;&lt;infra&gt;&gt; RedisService" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="820" y="500" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="a9" value="&lt;&lt;infra&gt;&gt; ClientProxy (NATS_CLIENT)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="500" width="280" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ae1" value="uses 1..1" style="endArrow=block;html=1;" edge="1" parent="1" source="a1" target="a2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae2" value="uses 1..1" style="endArrow=block;html=1;" edge="1" parent="1" source="a2" target="a3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae3" value="reads/writes 1..1" style="endArrow=block;html=1;" edge="1" parent="1" source="a1" target="a4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae4" value="input" style="endArrow=block;html=1;" edge="1" parent="1" source="a5" target="a1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae5" value="builds" style="endArrow=block;html=1;" edge="1" parent="1" source="a1" target="a6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae6" value="builds" style="endArrow=block;html=1;" edge="1" parent="1" source="a1" target="a7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae7" value="state storage" style="endArrow=diamondThin;html=1;" edge="1" parent="1" source="a1" target="a8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae8" value="send() geo.geocode-address / reclamos.create" style="endArrow=diamondThin;html=1;" edge="1" parent="1" source="a1" target="a9"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="d3" name="03-Dominio-Reclamos-UML-Detallado">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="r1" value="&lt;&lt;controller&gt;&gt; ReclamosController&#xa;--------------------------------&#xa;+ create(payload:CreateReclamoDto): Promise&lt;ReclamoCrudResponse&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="60" y="60" width="350" height="150" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="r2" value="&lt;&lt;service&gt;&gt; ReclamosService&#xa;--------------------------------&#xa;+ create(payload:CreateReclamoDto): Promise&lt;ReclamoCrudResponse&gt;&#xa;- createWithTrackingCode(payload:CreateReclamoDto, mensajes:MensajeHistorialCreate[]): Promise&lt;Reclamo&gt;&#xa;- generateTrackingCode(): string&#xa;- toResponse(reclamo:Reclamo): ReclamoResponseDto" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="460" y="50" width="560" height="250" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="r3" value="&lt;&lt;dto&gt;&gt; CreateReclamoDto&#xa;--------------------------------&#xa;+ correlationId: UUID&#xa;+ contactKey: string&#xa;+ canal: ClaimCanal&#xa;+ correo?: string&#xa;+ dni?: string&#xa;+ problema: string&#xa;+ direccion: string&#xa;+ lat: number&#xa;+ lng: number&#xa;+ categoria: ClaimCategoria&#xa;+ prioridad: ClaimPrioridad&#xa;+ observaciones?: string&#xa;+ metadata?: object&#xa;+ mensajes?: MensajeHistorialDto[]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="60" y="330" width="390" height="420" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="r4" value="&lt;&lt;dto&gt;&gt; ReclamoResponseDto&#xa;--------------------------------&#xa;+ id: string&#xa;+ codigoSeguimiento: string&#xa;+ correlationId: string&#xa;+ contactKey: string&#xa;+ canal: ClaimCanal&#xa;+ estado: ReclamoEstado&#xa;+ categoria: ClaimCategoria&#xa;+ prioridad: ClaimPrioridad&#xa;+ creadoEn: Date&#xa;+ actualizadoEn: Date" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="500" y="330" width="330" height="280" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="r5" value="&lt;&lt;entity&gt;&gt; Reclamo (Prisma)&#xa;--------------------------------&#xa;+ id: String&#xa;+ codigoSeguimiento: String&#xa;+ correlationId: String&#xa;+ contactKey: String&#xa;+ canal: Canal&#xa;+ problema: String&#xa;+ direccion: String&#xa;+ lat: Float&#xa;+ lng: Float&#xa;+ categoria: ReclamoCategoria&#xa;+ prioridad: ReclamoPrioridad&#xa;+ estado: ReclamoEstado" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="860" y="330" width="360" height="340" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="r6" value="&lt;&lt;entity&gt;&gt; MensajeHistorial (Prisma)&#xa;--------------------------------&#xa;+ id: String&#xa;+ reclamoId: String&#xa;+ origen: MensajeOrigen&#xa;+ texto: String&#xa;+ creadoEn: DateTime&#xa;+ metadata?: Json" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="330" width="320" height="220" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="r7" value="&lt;&lt;infra&gt;&gt; PrismaService" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="120" width="220" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="re1" value="delegates 1..1" style="endArrow=block;html=1;" edge="1" parent="1" source="r1" target="r2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re2" value="input" style="endArrow=block;html=1;" edge="1" parent="1" source="r3" target="r2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re3" value="maps" style="endArrow=block;html=1;" edge="1" parent="1" source="r2" target="r4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re4" value="uses transaction" style="endArrow=diamondThin;html=1;" edge="1" parent="1" source="r2" target="r7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re5" value="persists 1" style="endArrow=block;html=1;" edge="1" parent="1" source="r7" target="r5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re6" value="contains 0..*" style="endArrow=diamond;html=1;" edge="1" parent="1" source="r5" target="r6"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="d4" name="04-Dominio-Puro-Core1">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="dp1" value="&lt;&lt;aggregate root&gt;&gt; Reclamo&#xa;--------------------------------&#xa;+ id: string&#xa;+ trackingCode: string&#xa;+ contactKey: string&#xa;+ canal: Canal&#xa;+ problema: string&#xa;+ direccion: string&#xa;+ geolocalizacion: Geolocalizacion&#xa;+ categoria: Categoria&#xa;+ prioridad: Prioridad&#xa;+ estado: EstadoReclamo&#xa;--------------------------------&#xa;+ crear(datos:DatosReclamo): Reclamo&#xa;+ marcarEnProceso(): void&#xa;+ resolver(): void&#xa;+ rechazar(motivo:string): void" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="80" y="80" width="520" height="460" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dp2" value="&lt;&lt;value object&gt;&gt; Geolocalizacion&#xa;--------------------------------&#xa;+ lat: number&#xa;+ lng: number&#xa;+ formattedAddress: string" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="660" y="90" width="300" height="170" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dp3" value="&lt;&lt;entity&gt;&gt; MensajeHistorial&#xa;--------------------------------&#xa;+ id: string&#xa;+ origen: OrigenMensaje&#xa;+ texto: string&#xa;+ creadoEn: DateTime&#xa;+ metadata?: object" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="660" y="300" width="300" height="220" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dp4" value="&lt;&lt;domain service&gt;&gt; PoliticaPriorizacion&#xa;--------------------------------&#xa;+ calcular(problema:string, categoria:Categoria): Prioridad" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="110" width="330" height="130" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dp5" value="&lt;&lt;domain service&gt;&gt; PoliticaCoberturaGeografica&#xa;--------------------------------&#xa;+ validar(geo:Geolocalizacion): boolean" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="300" width="330" height="130" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dpe1" value="composes 1..1" style="endArrow=diamond;html=1;" edge="1" parent="1" source="dp1" target="dp2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="dpe2" value="composes 0..*" style="endArrow=diamond;html=1;" edge="1" parent="1" source="dp1" target="dp3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="dpe3" value="uses" style="endArrow=block;html=1;" edge="1" parent="1" source="dp1" target="dp4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="dpe4" value="uses" style="endArrow=block;html=1;" edge="1" parent="1" source="dp1" target="dp5"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

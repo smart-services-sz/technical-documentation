@@ -1,0 +1,338 @@
+@startuml
+' Core 1: Creacion de reclamo (version por capas)
+
+skinparam backgroundColor white
+skinparam classBackgroundColor #fcfcfc
+skinparam classBorderColor #333333
+skinparam ArrowColor #2f4f4f
+skinparam packageStyle rectangle
+skinparam defaultFontName Consolas
+skinparam shadowing false
+hide empty members
+
+left to right direction
+
+package "Capa Externa" as EXT {
+  class MetaWhatsappWebhookAPI <<boundary, ExternalAPI>>
+  class GoogleGeocodingAPI <<boundary, ExternalAPI>>
+}
+
+package "Capa Gateway (Entrada + Orquestacion inicial)" as GW {
+  class WebhooksController <<boundary>> {
+    + receiveMetaWhatsappWebhook(request, payload)
+  }
+
+  class WebhooksService <<control, Adapter>> {
+    + receiveMetaWhatsappWebhook(payload, rawBody?, signatureHeader?): Promise<object>
+    - extractInboundMessages(payload): CreateInboundMessageDto[]
+    - validateMetaWhatsappSignature(rawBody?, signatureHeader?): void
+  }
+
+  class InboundService <<control, Facade>> {
+    + receiveMessage(payload: CreateInboundMessageDto)
+    - scheduleDebounce(payload): void
+    - consolidateAndDispatch(contactKey, lastPayload): Promise<void>
+    - isDuplicateMessage(payload): Promise<boolean>
+    - emitChannelResponse(payload, response): Promise<void>
+  }
+
+  class WhatsappService <<control, Adapter>> {
+    + sendTextMessage(payload): Promise<string | null>
+  }
+
+  class CreateInboundMessageDto <<dto>> {
+    + channel: ChannelType
+    + channelIdentity: ChannelIdentityDto
+    + externalMessageId?: string
+    + messageText: string
+    + responseWindow: ResponseWindowDto
+  }
+
+  class AiInboundPayloadDto <<dto>> {
+    + correlationId: UUID
+    + contactKey: string
+    + consolidatedText: string
+    + messageCount: int
+    + messages: MessageRecordDto[]
+  }
+}
+
+package "Capa Aplicacion IA (ms-ai)" as AI {
+  class AiProcessController <<boundary>> {
+    + processInboundMessage(payload: AiInboundPayloadDto)
+  }
+
+  class AiProcessService <<control, Facade>> {
+    + processInboundMessage(payload: AiInboundPayloadDto): Promise<object>
+    - geocodeAddress(payload, address): Promise<GeocodeResponse>
+    - createClaim(payload, state): Promise<CreateResult>
+    - getConversationState(contactKey): Promise<ConversationState | null>
+    - saveConversationState(state): Promise<void>
+  }
+
+  class AiInterpreterService <<control>> {
+    + parseClaimText(input: string, clientId: string): Promise<ParsedClaimData>
+  }
+
+  class AiSecurityService <<control, StrategyPolicy>> {
+    + validateAndSanitizeInput(input: string, clientId?: string): string
+    + checkRateLimit(clientId: string): Promise<boolean>
+  }
+
+  class ConversationState <<entity, State>> {
+    + contactKey: string
+    + phase: "collecting_claim_data" | "closed"
+    + greeted: boolean
+    + problema?: string
+    + direccion?: string
+    + categoria?: ClaimCategoria
+    + prioridad?: ClaimPrioridad
+    + mensajes: MensajeEntry[]
+  }
+
+  class GeocodeAddressDto <<dto>> {
+    + correlationId: string
+    + address: string
+    + country?: string
+    + city?: string
+  }
+
+  class CreateReclamoDto <<dto>> {
+    + correlationId: string
+    + contactKey: string
+    + canal: ClaimCanal
+    + problema: string
+    + direccion: string
+    + lat: number
+    + lng: number
+    + categoria: ClaimCategoria
+    + prioridad: ClaimPrioridad
+    + mensajes?: MensajeHistorialDto[]
+  }
+}
+
+package "Capa Geolocalizacion (ms-geo)" as GEO {
+  class GeoController <<boundary>> {
+    + geocodeAddress(payload: GeocodeAddressDto)
+  }
+
+  class GeoService <<control, Adapter>> {
+    + geocodeAddress(payload: GeocodeAddressDto)
+  }
+}
+
+package "Capa Dominio Reclamos (ms-reclamos)" as REC {
+  class ReclamosController <<boundary>> {
+    + create(payload: CreateReclamoDto)
+  }
+
+  class ReclamosService <<control, Facade>> {
+    + create(payload: CreateReclamoDto): Promise<ReclamoCrudResponse>
+    - createWithTrackingCode(payload, mensajesCreate): Promise<Reclamo>
+    - generateTrackingCode(): string
+    - toResponse(reclamo: Reclamo): ReclamoResponseDto
+  }
+
+  class ReclamoResponseDto <<dto>> {
+    + id: string
+    + codigoSeguimiento: string
+    + estado: ReclamoEstado
+    + creadoEn: Date
+  }
+
+  class Reclamo <<entity>> {
+    + id: String
+    + codigoSeguimiento: String
+    + correlationId: String
+    + contactKey: String
+    + canal: Canal
+    + problema: String
+    + direccion: String
+    + lat: Float
+    + lng: Float
+    + categoria: ReclamoCategoria
+    + prioridad: ReclamoPrioridad
+    + estado: ReclamoEstado
+  }
+
+  class MensajeHistorial <<entity>> {
+    + id: String
+    + reclamoId: String
+    + origen: MensajeOrigen
+    + texto: String
+    + creadoEn: DateTime
+    + metadata: Json?
+  }
+}
+
+package "Capa Infraestructura" as INF {
+  class ClientProxy_Gateway <<infra, ObserverPublisher>> {
+    + send(pattern: string, payload: object)
+  }
+
+  class ClientProxy_AI <<infra, ObserverPublisher>> {
+    + send(pattern: string, payload: object)
+  }
+
+  class RedisService_Gateway <<infra, Singleton>> {
+    + getClient()
+  }
+
+  class RedisService_AI <<infra, Singleton>> {
+    + getClient()
+  }
+
+  class PrismaService <<infra, Singleton>> {
+    + transaction()
+    + reclamoCreate()
+  }
+
+  class NATS <<broker>>
+  class Redis <<cache>>
+  class PostgreSQL <<database>>
+}
+
+class MensajeEntry <<entity>> {
+  + origen: string
+  + texto: string
+  + creadoEn: string
+}
+
+interface IGeocodingProvider {
+  + geocodeAddress(payload: GeocodeAddressDto)
+}
+
+' Relaciones internas por capa
+WebhooksController ..> WebhooksService : dependency
+WebhooksService o--> InboundService : shared aggregation
+WebhooksService ..> CreateInboundMessageDto : maps
+InboundService ..> AiInboundPayloadDto : builds
+InboundService o--> WhatsappService : shared aggregation
+
+AiProcessController ..> AiProcessService : dependency
+AiProcessService o--> AiInterpreterService : shared aggregation
+AiInterpreterService o--> AiSecurityService : shared aggregation
+AiProcessService ..> ConversationState : read/write
+AiProcessService ..> GeocodeAddressDto : builds
+AiProcessService ..> CreateReclamoDto : builds
+ConversationState *-- "0..*" MensajeEntry : mensajes
+
+GeoController ..> GeoService : dependency
+IGeocodingProvider <|.. GeoService : realization
+
+ReclamosController ..> ReclamosService : dependency
+ReclamosService ..> CreateReclamoDto : input
+ReclamosService ..> ReclamoResponseDto : maps
+Reclamo "1" *-- "0..*" MensajeHistorial : mensajes
+
+' Relaciones cross-layer
+WebhooksService ..> MetaWhatsappWebhookAPI : webhook verification
+InboundService ..> ClientProxy_Gateway : send("ai.process-inbound-message")
+InboundService o--> RedisService_Gateway : shared aggregation
+
+AiProcessService o--> RedisService_AI : shared aggregation
+AiProcessService ..> ClientProxy_AI : send("geo.geocode-address")
+AiProcessService ..> ClientProxy_AI : send("reclamos.create")
+
+GeoService ..> GoogleGeocodingAPI : fetch geocode
+ReclamosService o--> PrismaService : shared aggregation
+PrismaService ..> Reclamo : CRUD
+
+ClientProxy_Gateway ..> NATS
+ClientProxy_AI ..> NATS
+RedisService_Gateway ..> Redis
+RedisService_AI ..> Redis
+PrismaService ..> PostgreSQL
+
+' Marcas ICONIX / Patrones para visibilidad academica
+note top of InboundService
+<<Facade>>
+Centraliza el flujo de entrada:
+normalizacion + idempotencia + debounce + dispatch NATS + salida de canal.
+end note
+
+note top of WebhooksService
+<<Adapter>>
+Adapta payload de Meta WhatsApp a DTO interno.
+end note
+
+note top of GeoService
+<<Adapter>>
+Adapta contrato interno a Google Geocoding API.
+end note
+
+note right of ClientProxy_Gateway
+<<Observer / Pub-Sub>>
+Publica eventos/comandos en NATS.
+end note
+
+note right of ConversationState
+<<State>>
+Fases del caso de uso:
+collecting_claim_data -> closed
+end note
+
+note bottom of WebhooksController
+<<Chain of Responsibility (pipeline)>>
+Boundary -> Control -> Control -> Control
+WebhooksController -> WebhooksService -> InboundService -> AiProcessService
+end note
+
+note right of RedisService_AI
+<<Singleton>>
+Instancia compartida de cliente Redis por servicio.
+end note
+
+' Flujo numerado del requerimiento core 1
+note right of GW
+1) Meta envia webhook
+2) WebhooksService valida firma/token
+3) Mapea a CreateInboundMessageDto
+4) InboundService recibe mensaje
+5) Sanitiza, idempotencia, debounce
+6) Genera AiInboundPayloadDto
+7) Publica ai.process-inbound-message
+end note
+
+note right of AI
+8) AiProcessService carga ConversationState
+9) Interpreta texto (AiInterpreterService)
+10) Valida seguridad/rate limit
+11) Si faltan datos: responde y espera
+12) Si datos completos: construye GeocodeAddressDto
+13) Llama geo.geocode-address
+14) Si cobertura valida: construye CreateReclamoDto
+15) Publica reclamos.create
+end note
+
+note right of GEO
+16) GeoService consulta Google Geocoding
+17) Retorna direccion normalizada + lat/lng
+end note
+
+note right of REC
+18) ReclamosService persiste Reclamo + MensajeHistorial
+19) Genera codigo de seguimiento unico
+20) Retorna confirmacion al flujo
+end note
+
+legend left
+== Convenciones ==
+<<boundary>> Limite de sistema/protocolo (ICONIX)
+<<control>> Orquestacion y reglas de aplicacion (ICONIX)
+<<dto>> Contrato de datos entre capas/servicios
+<<entity>> Modelo persistente/dominio
+<<infra>> Adaptadores tecnicos
+<<Facade>> Fachada de orquestacion
+<<Adapter>> Adaptador a contrato externo
+<<ObserverPublisher>> Publicador de eventos (Pub/Sub)
+<<State>> Estado de conversacion/flujo
+<<Singleton>> Instancia compartida de infraestructura
+<<StrategyPolicy>> Politicas intercambiables de validacion/seguridad
+..> Dependencia (uso)
+o--> Agregacion compartida
+*-- Composicion
+<|.. Realizacion de interfaz
+endlegend
+
+@enduml

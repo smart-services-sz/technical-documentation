@@ -1,0 +1,291 @@
+@startuml
+' Core 1: Creacion de reclamo (sin capas)
+' Diagrama de clases monolitico para ver tamano real del alcance
+
+skinparam backgroundColor white
+skinparam classBackgroundColor #fcfcfc
+skinparam classBorderColor #333333
+skinparam ArrowColor #2f4f4f
+skinparam packageStyle rectangle
+skinparam defaultFontName Consolas
+skinparam shadowing false
+hide empty members
+
+' =========================
+' EXTERNOS
+' =========================
+class MetaWhatsappWebhookAPI <<external>>
+class GoogleGeocodingAPI <<external>>
+class PostgreSQL <<database>>
+class NATS <<broker>>
+class Redis <<cache>>
+
+' =========================
+' GATEWAY
+' =========================
+class WebhooksController <<controller>> {
+  + verifyMetaWhatsappWebhook(mode: string, verifyToken: string, challenge: string)
+  + receiveMetaWhatsappWebhook(request, payload: Record<string, unknown>)
+}
+
+class WebhooksService <<service>> {
+  + verifyMetaWhatsappWebhook(mode: string, verifyToken: string, challenge: string): string
+  + receiveMetaWhatsappWebhook(payload: Record<string, unknown>, rawBody?: Buffer, signatureHeader?: string): Promise<object>
+  - extractInboundMessages(payload): CreateInboundMessageDto[]
+  - mapMetaMessageToInbound(...): CreateInboundMessageDto
+  - validateMetaWhatsappSignature(rawBody?: Buffer, signatureHeader?: string): void
+}
+
+class InboundService <<service>> {
+  + receiveMessage(payload: CreateInboundMessageDto)
+  + getContext(contactKey: string)
+  - scheduleDebounce(payload: SanitizedInboundMessage): void
+  - consolidateAndDispatch(contactKey: string, lastPayload: SanitizedInboundMessage): Promise<void>
+  - isDuplicateMessage(payload: SanitizedInboundMessage): Promise<boolean>
+  - persistConversationContext(payload: SanitizedInboundMessage): Promise<InboundContext>
+  - emitChannelResponse(payload: AiInboundPayload, response: unknown): Promise<void>
+}
+
+class WhatsappService <<service>> {
+  + sendTextMessage(payload: WhatsappSendMessagePayload): Promise<string | null>
+}
+
+class RedisService_Gateway <<infra>> {
+  + getClient()
+}
+
+class ClientProxy_Gateway <<infra>> {
+  + send(pattern: string, payload: unknown)
+}
+
+class CreateInboundMessageDto <<dto>> {
+  + channel: ChannelType
+  + channelIdentity: ChannelIdentityDto
+  + externalMessageId?: string
+  + messageText: string
+  + receivedAt?: string
+  + responseWindow: ResponseWindowDto
+  + metadata?: Record<string, unknown>
+}
+
+class AiInboundPayloadDto <<dto>> {
+  + correlationId: UUID
+  + contactKey: string
+  + channel: ChannelType
+  + channelIdentity: ChannelIdentityDto
+  + consolidatedText: string
+  + messageCount: int
+  + messages: MessageRecordDto[]
+  + firstReceivedAt: string
+  + lastReceivedAt: string
+  + metadata?: Record<string, unknown>
+}
+
+' =========================
+' MS-AI
+' =========================
+class AiProcessController <<controller>> {
+  + processInboundMessage(payload: AiInboundPayloadDto)
+}
+
+class AiProcessService <<service>> {
+  + processInboundMessage(payload: AiInboundPayloadDto): Promise<object>
+  - geocodeAddress(payload: AiInboundPayloadDto, address: string): Promise<GeocodeResponse>
+  - createClaim(payload: AiInboundPayloadDto, state: ConversationState): Promise<CreateResult>
+  - getConversationState(contactKey: string): Promise<ConversationState | null>
+  - saveConversationState(state: ConversationState): Promise<void>
+}
+
+class AiInterpreterService <<service>> {
+  + parseClaimText(input: string, clientId: string = "unknown"): Promise<ParsedClaimData>
+}
+
+class AiSecurityService <<service>> {
+  + validateAndSanitizeInput(input: string, clientId?: string): string
+  + checkRateLimit(clientId: string): Promise<boolean>
+}
+
+class RedisService_AI <<infra>> {
+  + getClient()
+}
+
+class ClientProxy_AI <<infra>> {
+  + send(pattern: string, payload: unknown)
+}
+
+class ConversationState <<entity>> {
+  + contactKey: string
+  + phase: "collecting_claim_data" | "closed"
+  + greeted: boolean
+  + correo?: string
+  + dni?: string
+  + problema?: string
+  + direccion?: string
+  + categoria?: ClaimCategoria
+  + prioridad?: ClaimPrioridad
+  + mensajes: MensajeEntry[]
+}
+
+class GeocodeAddressDto <<dto>> {
+  + correlationId: string
+  + address: string
+  + country?: string
+  + city?: string
+}
+
+' =========================
+' MS-GEO
+' =========================
+class GeoController <<controller>> {
+  + geocodeAddress(payload: GeocodeAddressDto)
+}
+
+class GeoService <<service>> {
+  + geocodeAddress(payload: GeocodeAddressDto)
+}
+
+' =========================
+' MS-RECLAMOS
+' =========================
+class ReclamosController <<controller>> {
+  + create(payload: CreateReclamoDto)
+}
+
+class ReclamosService <<service>> {
+  + create(payload: CreateReclamoDto): Promise<ReclamoCrudResponse>
+  - createWithTrackingCode(payload: CreateReclamoDto, mensajesCreate): Promise<Reclamo>
+  - generateTrackingCode(): string
+  - toResponse(reclamo: Reclamo): ReclamoResponseDto
+}
+
+class PrismaService <<infra>> {
+  + $transaction(...)
+  + reclamo.create(...)
+  + reclamo.findUnique(...)
+}
+
+class CreateReclamoDto <<dto>> {
+  + correlationId: string
+  + contactKey: string
+  + canal: ClaimCanal
+  + correo?: string
+  + dni?: string
+  + problema: string
+  + direccion: string
+  + lat: number
+  + lng: number
+  + categoria: ClaimCategoria
+  + prioridad: ClaimPrioridad
+  + observaciones?: string
+  + metadata?: object
+  + mensajes?: MensajeHistorialDto[]
+}
+
+class ReclamoResponseDto <<dto>> {
+  + id: string
+  + codigoSeguimiento: string
+  + estado: ReclamoEstado
+  + creadoEn: Date
+}
+
+class Reclamo <<entity>> {
+  + id: String
+  + codigoSeguimiento: String
+  + correlationId: String
+  + contactKey: String
+  + canal: Canal
+  + problema: String
+  + direccion: String
+  + lat: Float
+  + lng: Float
+  + categoria: ReclamoCategoria
+  + prioridad: ReclamoPrioridad
+  + estado: ReclamoEstado
+}
+
+class MensajeHistorial <<entity>> {
+  + id: String
+  + reclamoId: String
+  + origen: MensajeOrigen
+  + texto: String
+  + creadoEn: DateTime
+  + metadata: Json?
+}
+
+' =========================
+' RELACIONES ESTRUCTURALES
+' =========================
+WebhooksController --> WebhooksService : delegates
+WebhooksService --> InboundService : uses
+WebhooksService --> CreateInboundMessageDto : maps to
+InboundService --> RedisService_Gateway : persists context/idempotency
+InboundService --> ClientProxy_Gateway : send("ai.process-inbound-message")
+InboundService --> AiInboundPayloadDto : builds
+InboundService --> WhatsappService : channel out
+WebhooksService --> MetaWhatsappWebhookAPI : validates signature
+
+AiProcessController --> AiProcessService : delegates
+AiProcessService --> AiInterpreterService : parseClaimText()
+AiInterpreterService --> AiSecurityService : validate/rate limit
+AiProcessService --> RedisService_AI : state storage
+AiProcessService --> ConversationState : read/write
+AiProcessService --> ClientProxy_AI : send("geo.geocode-address")
+AiProcessService --> ClientProxy_AI : send("reclamos.create")
+AiProcessService --> GeocodeAddressDto : builds
+AiProcessService --> CreateReclamoDto : builds
+
+GeoController --> GeoService : delegates
+GeoService --> GoogleGeocodingAPI : fetch geocode
+
+ReclamosController --> ReclamosService : delegates
+ReclamosService --> PrismaService : transaction + persist
+ReclamosService --> CreateReclamoDto : input
+ReclamosService --> ReclamoResponseDto : maps
+PrismaService --> Reclamo : CRUD
+Reclamo "1" *-- "0..*" MensajeHistorial : mensajes
+PrismaService --> PostgreSQL : adapter-pg
+
+ClientProxy_Gateway --> NATS
+ClientProxy_AI --> NATS
+RedisService_Gateway --> Redis
+RedisService_AI --> Redis
+
+' =========================
+' FLUJO CORE 1 (todos los pasos)
+' =========================
+note right of WebhooksService
+1) Recibe webhook Meta
+2) Valida firma y token
+3) Normaliza payload a CreateInboundMessageDto
+4) Deriva a InboundService
+end note
+
+note right of InboundService
+5) Sanitiza mensaje
+6) Verifica idempotencia en Redis
+7) Buffer + debounce
+8) Consolida lote y envia ai.process-inbound-message
+9) Recibe respuesta IA y emite mensaje al canal
+end note
+
+note right of AiProcessService
+10) Carga ConversationState
+11) Interpreta texto (AI + fallback)
+12) Si faltan datos: responde y espera
+13) Si datos completos: geocodifica direccion
+14) Si direccion valida: construye CreateReclamoDto
+15) Envia reclamos.create
+end note
+
+note right of GeoService
+16) Geocodifica en Google
+17) Devuelve lat/lng y addressComponents
+end note
+
+note right of ReclamosService
+18) Persiste Reclamo + MensajeHistorial (transaccion)
+19) Genera tracking code unico
+20) Retorna confirmacion de reclamo creado
+end note
+
+@enduml
