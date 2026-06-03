@@ -1,0 +1,157 @@
+@startuml
+' Core 1 - Creacion de reclamo (base UML + ICONIX)
+' Basado en la implementacion actual del backend/frontend.
+
+title Core 1 - Secuencia Base de Creacion de Reclamo
+
+autonumber "[000]"
+hide footbox
+skinparam shadowing false
+skinparam ParticipantPadding 20
+skinparam BoxPadding 10
+skinparam sequenceMessageAlign center
+
+actor Ciudadano as user
+
+box "Boundary Layer" #EAF2FF
+  boundary "Public-Site\nFormulario Web" as web
+  boundary "Meta WhatsApp API" as meta
+  control "Gateway\nWebhooksController" as whCtrl
+  control "Gateway\nInboundController" as inCtrl
+end box
+
+box "Control Layer" #FFF7E6
+  control "Gateway\nWebhooksService" as whSvc
+  control "Gateway\nInboundService" as inSvc
+  control "MS-AI\nAiProcessController" as aiCtrl
+  control "MS-AI\nAiProcessService" as aiSvc
+  control "MS-AI\nAiInterpreterService" as aiInt
+  control "MS-GEO\nGeocode Service" as geo
+  control "MS-RECLAMOS\nReclamosController" as recCtrl
+  control "MS-RECLAMOS\nReclamosService" as recSvc
+  control "Gateway\nWhatsAppService" as waSvc
+end box
+
+box "Entity and Infra Layer" #EFFAF3
+  database "Redis Gateway" as redisGw
+  database "Redis MS-AI\nConversationState" as redisAi
+  entity "PrismaService" as prisma
+  database PostgreSQL as pg
+  queue NATS as nats
+end box
+
+note over web, inCtrl
+ICONIX BCE:
+- boundary: canales de entrada y API edge
+- control: orquestacion y logica de negocio
+- entity/infra: persistencia, broker y estado
+end note
+
+alt Canal Web
+  user -> web: Completa formulario y envia reclamo
+  web -> inCtrl: POST /api/inbound/messages
+  inCtrl -> inSvc: receiveMessage(dto)
+else Canal WhatsApp
+  user -> meta: Envia mensaje de reclamo
+  meta -> whCtrl: POST /webhooks/meta/whatsapp
+  whCtrl -> whSvc: receiveMetaWhatsappWebhook(payload)
+  whSvc -> inSvc: receiveMessage(CreateInboundMessageDto)
+end
+
+activate inSvc
+inSvc -> inSvc: sanitizePayload()
+inSvc -> redisGw: SET NX idempotency:{channel}:{externalMessageId}
+
+alt Mensaje duplicado
+  redisGw --> inSvc: clave ya existe
+  inSvc --> whSvc: accepted_duplicate (si viene de webhook)
+  inSvc --> inCtrl: accepted_duplicate (si viene de web)
+  deactivate inSvc
+else Mensaje nuevo
+  redisGw --> inSvc: OK
+  inSvc -> redisGw: MULTI set context + LPUSH messages + LTRIM + EXPIRE
+  inSvc -> inSvc: scheduleDebounce(contactKey)
+  inSvc --> whSvc: accepted_buffered (si viene de webhook)
+  inSvc --> inCtrl: 202 accepted_buffered (si viene de web)
+  deactivate inSvc
+end
+
+== Dispatch consolidado a IA ==
+
+inSvc -> redisGw: LRANGE messages + GET context
+inSvc -> redisGw: MULTI set dispatch payload + DEL messages
+inSvc -> nats: send ai.process-inbound-message(aiPayload)
+nats -> aiCtrl: ai.process-inbound-message
+aiCtrl -> aiSvc: processInboundMessage(payload)
+
+activate aiSvc
+aiSvc -> redisAi: GET state(contactKey)
+
+alt Primer contacto o saludo
+  aiSvc -> redisAi: SET state(greeted=true, phase=collecting_claim_data)
+  aiSvc --> aiCtrl: status awaiting_user_data o greeting_guidance
+else Conversacion activa
+  aiSvc -> aiInt: parseClaimText(consolidatedText, contactKey)
+  aiInt --> aiSvc: parsed (understood, confidence, campos)
+  aiSvc -> redisAi: SET merged state
+
+  alt Baja confianza o faltan datos
+    aiSvc -> redisAi: SET state + assistantMessage de solicitud
+    aiSvc --> aiCtrl: status needs_rephrase o missing_required_data
+  else Datos completos
+    aiSvc -> nats: send geo.geocode-address(address, country, city?)
+    nats -> geo: geo.geocode-address
+    geo --> nats: GeocodeResponse
+    nats --> aiSvc: GeocodeResponse
+
+    alt Direccion fuera de zona
+      aiSvc -> redisAi: SET state (direccion undefined) + assistantMessage
+      aiSvc --> aiCtrl: status address_out_of_service_area
+    else Direccion valida
+      aiSvc -> nats: send reclamos.create(CreateReclamoDto)
+      nats -> recCtrl: reclamos.create
+      recCtrl -> recSvc: create(payload)
+
+      activate recSvc
+      recSvc -> recSvc: createWithTrackingCode()
+      recSvc -> prisma: $transaction()
+      prisma -> pg: INSERT Reclamo + INSERT MensajeHistorial[]
+      pg --> prisma: commit
+      prisma --> recSvc: reclamo persistido
+      recSvc --> recCtrl: ReclamoCrudResponse(status=created, trackingCode)
+      deactivate recSvc
+
+      recCtrl --> nats: CreateReclamoResponse
+      nats --> aiSvc: CreateReclamoResponse
+      aiSvc -> redisAi: SET state phase=closed + mensaje confirmacion
+      aiSvc --> aiCtrl: status claim_created + assistantMessage + trackingCode
+    end
+  end
+end
+
+deactivate aiSvc
+aiCtrl --> nats: response
+nats --> inSvc: ai response
+
+activate inSvc
+inSvc -> redisGw: SET dispatch-result
+inSvc -> inSvc: extractAssistantMessage() + extractStatus()
+inSvc -> redisGw: SET outbound message
+
+alt Canal WhatsApp
+  inSvc -> waSvc: sendTextMessage(phoneNumberId, recipientPhone, assistantMessage)
+  waSvc --> inSvc: messageId o null
+else Canal Web u otros
+  inSvc -> inSvc: Log CHANNEL-OUT (sin envio activo al cliente)
+end
+
+deactivate inSvc
+
+note over user, waSvc
+Resultado funcional Core 1:
+- Se crea reclamo en ms-reclamos con codigo de seguimiento.
+- Se responde mensaje de confirmacion por WhatsApp.
+- En canal web actual, la confirmacion asincrona no vuelve al navegador en este flujo.
+end note
+
+@enduml
