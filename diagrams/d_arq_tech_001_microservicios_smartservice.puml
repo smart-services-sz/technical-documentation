@@ -1,0 +1,94 @@
+@startuml D-ARQ-TECH-001-Microservicios-SmartService
+
+title SmartService 2026 - Arquitectura de Microservicios (Stack Tecnologico)
+
+skinparam shadowing false
+skinparam handwritten false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam linetype ortho
+skinparam backgroundColor white
+skinparam nodesep 140
+skinparam ranksep 190
+
+top to bottom direction
+
+' CAPA 1: Canales y Clientes
+package "Capa 1: Canales y Clientes" {
+    node "Ciudadano\n(WhatsApp / Web)" as Citizen
+    node "Meta WhatsApp\nWebhook + Graph API" as MetaWA
+    node "Public Site\n(Static Web)" as PublicSite
+    node "Admin Dashboard\n(Next.js + React)" as AdminUI
+}
+
+' CAPA 2: Borde/API
+package "Capa 2: API de Borde" {
+    node "Gateway\n(NestJS)\n- Webhooks\n- Inbound handlers\n- JWT guard\n- Outbound WhatsApp" as Gateway
+}
+
+' CAPA 3: Mensajeria y Estado
+package "Capa 3: Mensajeria y Estado" {
+    queue "NATS Broker\n(pub/sub + request/reply)" as NATS
+    database "Redis\n(debounce, idempotencia, estado conversacional)" as Redis
+}
+
+' CAPA 4: Microservicios de Dominio
+package "Capa 4: Microservicios de Dominio" {
+    node "ms-auth\n(NestJS)\n- JWT issuer/validation\n- Roles/permissions" as MsAuth
+    node "ms-ai\n(NestJS)\n- NLP/IA\n- Orquestacion del reclamo\n- Maquina de estados" as MsAI
+    node "ms-geo\n(NestJS)\n- Geocoding\n- Validacion de cobertura" as MsGeo
+    node "ms-reclamos\n(NestJS)\n- Creacion y gestion\n- Historial y tracking" as MsReclamos
+}
+
+' CAPA 5: Persistencia
+package "Capa 5: Persistencia" {
+    database "PostgreSQL Auth\n(users, roles, permissions)" as DBAuth
+    database "PostgreSQL Reclamos\n(reclamos, estado, historial)" as DBReclamos
+}
+
+' CAPA 6: Servicios Externos
+package "Capa 6: Servicios Externos" {
+    cloud "OpenAI API\n(NLP / clasificacion)" as OpenAI
+    cloud "Google Maps API\n(geocoding)" as GoogleMaps
+}
+
+' Relaciones principales
+Citizen --> MetaWA : envia mensajes
+MetaWA --> Gateway : POST webhook
+Gateway --> MetaWA : envio outbound
+
+Citizen --> PublicSite : acceso web
+PublicSite --> Gateway : REST
+AdminUI --> Gateway : REST + JWT
+
+Gateway --> Redis : debounce/idempotencia/contexto
+MsAI --> Redis : estado conversacional (TTL)
+
+Gateway --> NATS : publish ai.process-inbound-message
+Gateway --> NATS : request auth.validate-token
+MsAuth --> NATS : responde validacion
+
+NATS --> MsAI : consume ai.process-inbound-message
+MsAI --> NATS : request geo.geocode-address
+NATS --> MsGeo : dispatch geo.geocode-address
+MsGeo --> NATS : response geocode
+
+MsAI --> NATS : request reclamos.create
+NATS --> MsReclamos : dispatch reclamos.create
+MsReclamos --> NATS : response claim_created
+
+MsAuth --> DBAuth : SQL
+MsReclamos --> DBReclamos : SQL
+
+MsAI --> OpenAI : parseClaimText
+MsGeo --> GoogleMaps : geocodeAddress
+
+legend right
+Proyecto: SmartService
+Metodologia: ICONIX
+Arquitectura: Microservicios con API Gateway
+Backbone: NATS + Redis
+Microservicios core: gateway, ms-auth, ms-ai, ms-geo, ms-reclamos
+endlegend
+
+@enduml
