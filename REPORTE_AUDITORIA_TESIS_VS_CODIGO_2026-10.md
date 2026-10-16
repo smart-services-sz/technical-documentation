@@ -2,7 +2,7 @@
 
 **Fecha de auditoría:** 16 de octubre de 2026
 **Proyecto:** SmartService
-**Resultado general:** El núcleo funcional, el alta pública y el aislamiento territorial están implementados en código. Aún falta validar el despliegue y los flujos externos de extremo a extremo; métricas e higiene de datos personales siguen abiertas.
+**Resultado general:** El núcleo funcional, el alta pública, el aislamiento territorial y los indicadores agregados municipales están implementados en código. Aún falta validar el despliegue y los flujos externos de extremo a extremo, además de confirmar en operación los controles de privacidad y retención.
 
 ## 1. Alcance y criterio
 
@@ -36,7 +36,7 @@ Este documento clasifica el grado de diferencia, no asigna un porcentaje global.
 
 7. **Notificaciones de ciclo de vida y WhatsApp: eventos implementados; entrega externa pendiente de prueba.** MS-Reclamos publica eventos para transiciones directas y respuestas ciudadanas. MS-Notifications prioriza WhatsApp y evita duplicados de respuesta. Meta debe aprobar/configurar el template v2 y falta E2E real con NATS/Meta para entrega, errores y reintentos. Referencias: [implementación 06](IMPLEMENTACION_06_WHATSAPP_CONVERSACIONAL.md), [implementación 07](IMPLEMENTACION_07_WHATSAPP_PRIORITARIO_Y_CONVERSACIONAL.md), [implementación 08](IMPLEMENTACION_08_MENU_RAPIDO_Y_HISTORIAL_RECLAMO.md), [implementación 09](IMPLEMENTACION_09_TEMPLATE_META_VARIABLES.md).
 
-8. **Reportes e indicadores del dashboard: pendientes.** La sección de métricas sigue siendo placeholder. Definir primero indicadores mínimos, denominadores, filtros temporales/territoriales y autorización por municipio. Referencia: [dashboard administrativo](../admin-dashboard/src/components/admin-dashboard.tsx).
+8. **Reportes e indicadores municipales: implementados en código; validación desplegada pendiente.** Dashboard consulta agregados de reclamos y ruteo para un único municipio, con filtros temporales y desglose operativo; Reclamos agrega estado, categoría, prioridad, canal y área, mientras que Routing aporta planes, rutas, asignaciones, paradas, intervenciones y evidencias. El municipio del JWT prevalece y el ADMIN de plataforma debe seleccionar uno. Las consultas agregan en backend y no devuelven datos personales. Routing no dispone de dimensión de área, por lo que sus métricas son municipales y no heredan los filtros de reclamos. Falta probar los endpoints desplegados con dos municipios y datos sintéticos. Referencias: [implementación 19](IMPLEMENTACION_19_METRICAS_MUNICIPALES.md), [panel](../admin-dashboard/src/components/reclamos-metrics-panel.tsx).
 
 9. **Secretos y PII en logs: saneamiento implementado; verificar despliegue y regresiones.** La entrega 18 retiró connection strings, payloads, texto/contacto, direcciones/coordenadas, destinatarios y cuerpos de proveedor; añadió pruebas negativas e interceptores de metadata allowlist. Falta confirmar que todos los despliegues usan estas versiones y mantener pruebas de regresión. Referencias: [inventario](IMPLEMENTACION_16_AUDITORIA_LOGGING_TRANSVERSAL.md), [implementación 18](IMPLEMENTACION_18_AUDITORIA_TRANSVERSAL_Y_DASHBOARD.md).
 
@@ -74,11 +74,11 @@ Validaciones registradas en las entregas; estos resultados no equivalen a prueba
 | Proyecto | Resultado |
 |---|---|
 | `ms-ai` | 11 suites y 77 pruebas aprobadas; build aprobado |
-| `ms-routing` | 5 suites y 41 pruebas aprobadas; build aprobado |
-| `ms-reclamos` | 4 suites y 18 pruebas aprobadas; 1 prueba de integración omitida; build aprobado |
+| `ms-routing` | 5 suites y 42 pruebas aprobadas; build aprobado |
+| `ms-reclamos` | 5 suites y 21 pruebas aprobadas; 1 prueba de integración omitida; build aprobado |
 | `ms-notifications` | Pruebas enfocadas WhatsApp: 2 suites y 7 pruebas; Meta/NATS real no ejecutado |
-| `admin-dashboard` | 7 archivos y 30 pruebas aprobadas; typecheck y build aprobados |
-| `gateway` | 6 suites enfocadas y 50 pruebas aprobadas; build aprobado. La suite general mantiene fallos preexistentes de inyección en fixtures genéricos |
+| `admin-dashboard` | 11 archivos y 40 pruebas aprobadas; typecheck incluido en build de producción aprobado |
+| `gateway` | Pruebas focalizadas de routing y reclamos aprobadas; build aprobado. La suite general mantiene fallos preexistentes de inyección en fixtures genéricos (`NATS_CLIENT`) |
 | `ms-auth` | Pruebas municipales enfocadas y build aprobados; la suite general mantiene fallos preexistentes de inyección (`PrismaService`/`NATS_CLIENT`) |
 | `ms-geo` | No define script `test` |
 
@@ -90,6 +90,6 @@ Alta pública y UI se probaron con dobles/API interceptada; no se enviaron recla
 2. **Asegurar durabilidad y retención:** decidir JetStream/outbox, ACK/reintentos, retención y alertas; revisar acceso a IP/User-Agent y metadata.
 3. **Prueba integrada de dos municipios:** alta, seguimiento, planes y acceso cruzado con datos sintéticos.
 4. **WhatsApp real en sandbox:** template v2, entrega/reintentos y respuesta rápida sin duplicados.
-5. **Métricas mínimas y operación:** indicadores territoriales, backup restaurable, CI/CD, alertas y runbooks. Mantener documentada la discrepancia del checksum de `0_baseline`; no usar reset ni reescribir historial.
+5. **Operación de métricas:** desplegar Dashboard, Gateway, MS-Reclamos y MS-Routing; verificar con dos municipios sintéticos que filtros, scopes y agregados no se mezclen. Completar backup restaurable, CI/CD, alertas y runbooks. Mantener documentada la discrepancia del checksum de `0_baseline`; no usar reset ni reescribir historial.
 
-**Estado de cambios:** se actualizó la matriz de hallazgos, validaciones y prioridades con el estado de las implementaciones 01–18. No se modificaron servicios ni datos durante esta actualización documental.
+**Estado de cambios:** se actualizó la matriz de hallazgos, validaciones y prioridades con el estado de las implementaciones 01–19. No se conectaron bases de datos ni se modificaron datos durante esta entrega.
