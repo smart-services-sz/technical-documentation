@@ -3,6 +3,8 @@
 **Fecha:** 16 de octubre de 2026  
 **Estado:** servicio, consulta y migracion implementados; esquema aplicado y smoke test real de escritura/lectura verificado en la base Railway proporcionada. Push pendiente de esta entrega; no se pudo confirmar un deploy Railway desde las herramientas disponibles.
 
+**Correccion de build Railway (16/10/2026):** el primer build detecto que el builder usaba Node 18.20.5, incompatible con Prisma 7.10.1 (requiere Node 20.19+, 22.12+ o 24+). Se fijo el runtime a Node 22.22.2 mediante `.node-version` y `engines.node`, se mantuvo Prisma CLI como dependencia de runtime para la migracion de arranque y se fuerza la instalacion de dependencias de desarrollo durante el build. Con el orden Railway `npm ci --include=dev`, `prisma generate`, tests y `nest build`, la validacion local pasa en Node 22.22.2.
+
 ## Entrega
 
 Se creo `ms-audit` como microservicio NestJS/Prisma 7 para recibir `audit.log` por NATS y almacenar eventos en PostgreSQL. Se adapto la referencia de `C:\actas-be\ms-audit` al patron `@prisma/adapter-pg` usado por SmartService; no se copio su configuracion local ni se leyo su `.env`.
@@ -24,6 +26,7 @@ Se aplico `20261016110000_init_audit`. `prisma migrate deploy` termino correctam
 - `ms-audit/src/main.ts`, `app.module.ts`, `prisma/`: runtime NATS y conexion Prisma.
 - `ms-audit/src/audit/`: DTOs, consumidor `audit.log`, query `audit.get.logs`, persistencia idempotente, redaccion y pruebas.
 - `ms-audit/railway.toml`, `.env.example`, `.gitignore`, `README.md`: build/start/migracion de Railway y configuracion sin secretos versionados.
+- `ms-audit/.node-version` y `engines.node`: runtime compatible con Prisma 7; Prisma CLI queda disponible para migrate deploy en start.
 - `gateway/src/audit/` y `gateway/src/app.module.ts`: endpoint de consulta ADMIN y filtros.
 - `ms-auth/src/utils/audit.publisher.ts` y `.spec.ts`: `eventId` UUID y contexto territorial/correlacion opcional, compatible con el evento existente.
 - `technical-doc/IMPLEMENTACION_16_AUDITORIA_LOGGING_TRANSVERSAL.md`: inventario de riesgos y estrategia de redaccion.
