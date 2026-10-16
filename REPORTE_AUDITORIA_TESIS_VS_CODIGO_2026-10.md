@@ -1,12 +1,12 @@
 # Auditoría de alineamiento: tesis vs. sistema implementado
 
-**Fecha de auditoría:** 13 de octubre de 2026
+**Fecha de auditoría:** 16 de octubre de 2026
 **Proyecto:** SmartService
-**Resultado general:** Alineación parcial; el núcleo backend y de ruteo está avanzado, pero hay brechas funcionales, de aislamiento multi-municipio y de preparación para producción que impiden considerar completo el MVP definido por la tesis.
+**Resultado general:** El núcleo funcional, el alta pública y el aislamiento territorial están implementados en código. Aún falta validar el despliegue y los flujos externos de extremo a extremo; métricas e higiene de datos personales siguen abiertas.
 
 ## 1. Alcance y criterio
 
-La referencia principal fue el PDF de tesis fechado el 03/09/2026 indicado en la bitácora de auditoría de CORE. Se contrastaron sus objetivos funcionales y técnicos con el código, esquemas Prisma, endpoints, dashboard, sitio público, Compose y pruebas disponibles. La revisión del PDF se realizó en modo de solo lectura.
+La referencia principal es el PDF de tesis fechado el 03/09/2026 indicado en la bitácora de auditoría de CORE. Esta actualización contrasta el estado anterior con las implementaciones 01–15, código, esquemas, endpoints y pruebas registradas. Se distingue la existencia de código de la validación con servicios externos o datos reales; no se afirma que toda la solución esté desplegada en producción.
 
 Este documento clasifica el grado de diferencia, no asigna un porcentaje global. No existe una matriz ponderada de requisitos que permita justificar una cifra de alineamiento. Tampoco se conectaron bases de datos ni se ejecutaron pruebas de integración que requieran infraestructura externa.
 
@@ -20,41 +20,41 @@ Este documento clasifica el grado de diferencia, no asigna un porcentaje global.
 
 ### Crítica
 
-1. **Aislamiento de reclamos por municipio y área no impuesto en el listado.** El endpoint permite `ADMIN` y `AGENT`, pero no toma el usuario autenticado para limitar automáticamente la consulta a su municipio/área. Los filtros territoriales son opcionales y llegan desde la query; si se omiten, MS-Reclamos no aplica condición territorial. Un agente podría consultar reclamos de otros municipios. Es un riesgo estático confirmado en el camino del código; no se probó contra datos reales. Referencias: [Gateway controller](../gateway/src/reclamos/reclamos.controller.ts), [filtros de reclamos](../gateway/src/reclamos/dto/find-reclamos.dto.ts), [consulta en MS-Reclamos](../ms-reclamos/src/reclamos/reclamos.service.ts).
+1. **Aislamiento territorial de reclamos: implementado; falta prueba integrada de autorización.** Gateway deriva municipio/área del JWT y MS-Reclamos aplica el ámbito recibido. Ruteo exige municipio autenticado también para ADMIN y filtra reglas, planes, rutas, intervenciones y evidencias. Las pruebas cubren filtros falsificados y acceso cruzado con dobles; falta recorrerlo integrado con dos municipios desplegados. Los consumidores internos NATS siguen siendo confiables y deben propagar el ámbito cuando actúan por un usuario. Referencias: [implementación 01](IMPLEMENTACION_01_AISLAMIENTO_TERRITORIAL.md), [implementación 13](IMPLEMENTACION_13_AISLAMIENTO_MUNICIPAL_ROUTING.md).
 
 ### Alta
 
-2. **El seguimiento público no coincide entre frontend, Gateway y MS-Reclamos.** El sitio manda solo el código de seguimiento; Gateway lo reenvía sin `contactKey`, mientras el DTO del consumidor lo declara obligatorio y MS-Reclamos aplica `ValidationPipe` global. Por ello, el flujo actual probablemente rechaza la consulta antes de devolver el estado. La función alternativa que consulta solo por código no es la que invoca el controlador NATS. Referencias: [sitio público](../public-site/app.js), [Gateway service](../gateway/src/reclamos/reclamos.service.ts), [DTO de seguimiento](../ms-reclamos/src/reclamos/dto/public-tracking.dto.ts), [bootstrap MS-Reclamos](../ms-reclamos/src/main.ts).
+2. **Seguimiento público con código y contacto: implementado; sin prueba integrada real.** El ciudadano aporta código más teléfono o correo; MS-Reclamos devuelve respuesta mínima solo si coinciden y Gateway limita por IP con Redis, fallando cerrado si Redis no está disponible. No es OTP ni verifica posesión actual. Falta confirmar Gateway/NATS/DB desplegados y la IP real detrás del proxy. Referencia: [implementación 02](IMPLEMENTACION_02_SEGUIMIENTO_PUBLICO.md).
 
-3. **No hay formulario ciudadano web conectado para crear reclamos.** La tesis incluye un formulario web complementario dentro del MVP. El sitio actual implementa consulta de seguimiento, pero no el envío de una solicitud; aunque la API de creación existe, no está conectada a una interfaz ciudadana web. Referencias: [página pública](../public-site/index.html), [JavaScript público](../public-site/app.js), [endpoint Gateway de reclamos](../gateway/src/reclamos/reclamos.controller.ts).
+3. **Alta ciudadana web y validación municipal: implementadas; dependencias externas por verificar.** El sitio tiene formulario, seguimiento y categorías activas del catálogo. Gateway consulta y valida municipio, categoría y cobertura antes de crear. La UI se probó con APIs simuladas; Google Geocoding, NATS productivo y creación desplegada no se validaron de extremo a extremo. Referencias: [implementación 03](IMPLEMENTACION_03_ALTA_CIUDADANA_WEB.md), [implementación 12](IMPLEMENTACION_12_ALTA_CON_CATALOGO_MUNICIPAL.md).
 
-4. **No hay carga real ni almacenamiento externo de evidencias.** Las evidencias de intervención guardan una URL y metadatos, pero no encontré endpoints de carga multipart ni integración S3/Wasabi. La tesis describe el almacenamiento multimedia fuera de la base de datos. Referencias: [modelo de ruteo](../ms-routing/prisma/schema.prisma), [DTO de evidencia](../ms-routing/src/routing/dto/attach-intervention-evidence.dto.ts).
+4. **Evidencias S3/Wasabi: flujo privado implementado; bucket real pendiente de verificar.** Alta ciudadana e intervenciones tienen multipart, validación de contenido, límites y URLs firmadas con autorización. Las pruebas usan S3 simulado; faltan credenciales/política, carga/descarga real y limpieza verificada en el entorno. Referencias: [implementación 04](IMPLEMENTACION_04_EVIDENCIAS_S3.md), [implementación 05](IMPLEMENTACION_05_EVIDENCIAS_INTERVENCION.md).
 
-5. **Detección de duplicados declarada como diferencial de IA (estado actualizado: primera versión asistida implementada el 15/10/2026).** Al momento del relevamiento no existía lógica de similitud. Ahora MS-AI consulta reclamos activos de la misma categoría y municipio, puntúa cercanía geográfica y similitud textual, y guarda hasta tres candidatos en metadata para revisión humana. No bloquea ni fusiona reclamos automáticamente. La comparación es heurística y debe evaluarse con datos reales antes de calibrar umbrales. Referencias: [búsqueda asistida en MS-AI](../ms-ai/src/conversation/conversation-state-support.service.ts), [normalización de respuesta](../ms-reclamos/src/reclamos/reclamos.service.ts), [panel de sugerencias](../admin-dashboard/src/components/reclamos-panel.tsx).
+5. **Sugerencias de reclamos posiblemente duplicados: primera versión implementada.** MS-AI compara reclamos activos por municipio/categoría, proximidad y similitud textual; ofrece hasta tres candidatos a revisión humana, sin bloquear ni fusionar. Falta calibración con datos representativos y evaluación de falsos positivos/negativos. Referencia: [implementación 10](IMPLEMENTACION_10_DUPLICADOS_ASISTIDOS.md).
 
-6. **Configuración municipal: catálogo, alta y aislamiento de ruteo implementados; migraciones aplicadas en las bases verificadas (actualizado el 15/10/2026).** Existe un catálogo administrable en MS-Auth con panel ADMIN. El alta pública y MS-AI consultan el municipio vinculado en servidor y validan estado, categoría y cobertura. Ruteo incorpora propiedad municipal de reglas/planes, alcance desde JWT, acceso territorial a rutas/intervenciones y claves idempotentes separadas. Se alineó una deriva previa y se aplicó la migración municipal de MS-Routing en la base autorizada, que estaba vacía; el esquema final no tiene diferencias respecto de Prisma. La discrepancia histórica del checksum del baseline queda documentada sin alterar su registro. Las pruebas cruzadas de servicios usan dobles: siguen pendientes el despliegue del código y la prueba integrada de extremo a extremo; otros entornos con datos requieren revisar legacy. Referencias: [implementación 11](IMPLEMENTACION_11_CONFIGURACION_MUNICIPAL.md), [implementación 12](IMPLEMENTACION_12_ALTA_CON_CATALOGO_MUNICIPAL.md), [implementación 13](IMPLEMENTACION_13_AISLAMIENTO_MUNICIPAL_ROUTING.md), [implementación 14](IMPLEMENTACION_14_ALINEACION_Y_MIGRACION_DB_ROUTING.md).
+6. **Configuración municipal y aislamiento de ruteo: implementados; operación multi-municipio integrada pendiente.** Catálogo, alta pública, MS-AI y alcance JWT de ruteo están conectados en código. Las migraciones se aplicaron en las bases verificadas; la base de ruteo estaba vacía. Se corrigió la edición municipal del usuario ADMIN y el usuario confirmó que pudo entrar a Planes. Las pruebas de dos municipios usan dobles; falta validar reglas, cuadrillas, zonas, altas y rutas integradas en un entorno desplegado. El checksum histórico de `0_baseline` difiere y permanece documentado; otros entornos con datos deben revisarse antes de migrar. Referencias: [implementación 11](IMPLEMENTACION_11_CONFIGURACION_MUNICIPAL.md), [implementación 12](IMPLEMENTACION_12_ALTA_CON_CATALOGO_MUNICIPAL.md), [implementación 13](IMPLEMENTACION_13_AISLAMIENTO_MUNICIPAL_ROUTING.md), [implementación 14](IMPLEMENTACION_14_ALINEACION_Y_MIGRACION_DB_ROUTING.md), [implementación 15](IMPLEMENTACION_15_EDICION_MUNICIPIO_USUARIO.md).
 
-7. **Notificaciones de ciclo de vida incompletas.** MS-Notifications existe y consume el evento versionado de cambio de estado, pero MS-Reclamos lo publica desde el método genérico `update`; cambios directos como cierre, revisión, nueva visita y reapertura no recorren ese publicador. Además, el canal predeterminado es `log`, por lo que no hay entrega ciudadana por WhatsApp salvo configuración adicional. Referencias: [servicio de reclamos](../ms-reclamos/src/reclamos/reclamos.service.ts), [servicio de notificaciones](../ms-notifications/src/notifications/notifications.service.ts), [consumer NATS](../ms-notifications/src/notifications/notifications.controller.ts).
+7. **Notificaciones de ciclo de vida y WhatsApp: eventos implementados; entrega externa pendiente de prueba.** MS-Reclamos publica eventos para transiciones directas y respuestas ciudadanas. MS-Notifications prioriza WhatsApp y evita duplicados de respuesta. Meta debe aprobar/configurar el template v2 y falta E2E real con NATS/Meta para entrega, errores y reintentos. Referencias: [implementación 06](IMPLEMENTACION_06_WHATSAPP_CONVERSACIONAL.md), [implementación 07](IMPLEMENTACION_07_WHATSAPP_PRIORITARIO_Y_CONVERSACIONAL.md), [implementación 08](IMPLEMENTACION_08_MENU_RAPIDO_Y_HISTORIAL_RECLAMO.md), [implementación 09](IMPLEMENTACION_09_TEMPLATE_META_VARIABLES.md).
 
-8. **Reportes e indicadores del dashboard no están conectados.** La sección de métricas sigue siendo un placeholder y declara que los gráficos y reportes se agregarán al conectar los microservicios. La tesis los contempla como capacidades del MVP. Referencia: [dashboard administrativo](../admin-dashboard/src/components/admin-dashboard.tsx).
+8. **Reportes e indicadores del dashboard: pendientes.** La sección de métricas sigue siendo placeholder. Definir primero indicadores mínimos, denominadores, filtros temporales/territoriales y autorización por municipio. Referencia: [dashboard administrativo](../admin-dashboard/src/components/admin-dashboard.tsx).
 
-9. **Datos personales registrados en logs de creación.** MS-Reclamos escribe el payload completo a nivel `debug`; puede contener contacto, correo, DNI, ubicación y mensajes. Si `debug` se activa en producción o los logs se centralizan, hay riesgo de exponer datos personales. Referencia: [controlador de reclamos](../ms-reclamos/src/reclamos/reclamos.controller.ts).
+9. **Secretos y PII en logs: riesgo transversal abierto.** MS-Auth imprime `DATABASE_URL`; los bootstraps publican URLs NATS/Redis; MS-Reclamos registra el payload completo; MS-AI/Gateway imprimen contacto/texto conversacional, MS-Geo dirección/coordenadas, y el canal `log` registra destinatario/mensaje. Debe aplicarse saneamiento con allowlist y pruebas negativas en todos los servicios. Inventario y plan: [implementación 16](IMPLEMENTACION_16_AUDITORIA_LOGGING_TRANSVERSAL.md).
 
 ### Media
 
-10. **Conversaciones sin persistencia histórica dedicada.** El estado conversacional vive en Redis con expiración; no encontré MongoDB ni otra persistencia histórica de conversaciones y resultados variables de IA. La tesis menciona MongoDB como tecnología que podría utilizarse, por lo que esta diferencia es moderada y no un bloqueo categórico del MVP.
+10. **Persistencia histórica de conversaciones: no implementada.** El estado vive en Redis con expiración. Definir propósito, retención y privacidad antes de agregar almacenamiento histórico; no es el bloqueo inmediato del MVP.
 
-11. **No se encontró BullMQ para trabajos en segundo plano.** Hay NATS y reintentos de notificación dentro del servicio, pero no una cola BullMQ dedicada para tareas diferidas, procesamiento de archivos o reintentos durables.
+11. **Cola BullMQ: no encontrada.** Hay NATS y reintentos de notificación. Evaluar solo si los requisitos de trabajos durables lo justifican.
 
-12. **Despliegue y continuidad operativa incompletos.** La tesis plantea Railway para el despliegue inicial y contempla políticas de backup. Hay Compose para las bases y otro Compose de Gateway para Redis/NATS; no encontré Dockerfiles para los servicios, manifiestos de despliegue Railway, workflows de CI/CD ni automatización de copias. Referencias: [Compose de bases](../docker-compose.yml), [Compose de infraestructura Gateway](../gateway/docker-compose.yml).
+12. **Continuidad operativa: CI/CD, backups y despliegue reproducible por cerrar/verificar.** Hay Compose, pero no se evidenció automatización completa de backups y CI/CD. Confirmar Railway por servicio, restauración probada, alertas y runbooks; no inferir el estado de recursos gestionados sin revisar el entorno.
 
-13. **Auditoría presente, pero parcial y distribuida.** Reclamos y rutas conservan historiales de acciones, por lo que no corresponde clasificarlos como carentes de auditoría. No se identificó un servicio central que consolide accesos, configuración y operaciones de todos los módulos; la cobertura no equivale aún a la trazabilidad integral propuesta.
+13. **Auditoría central: persistencia implementada; despliegue y durabilidad pendientes.** MS-Audit consume `audit.log`, almacena en PostgreSQL y ofrece consulta ADMIN por Gateway; su migración ya se aplicó a la base Railway proporcionada y el esquema coincide con Prisma. MS-Auth es el único productor integrado actualmente. El envío usa NATS Core fire-and-forget, que puede perder eventos si el consumidor está desconectado; faltan deploy/configuración NATS, validación end-to-end, productores adicionales y durabilidad JetStream/outbox. Referencias: [implementación 16](IMPLEMENTACION_16_AUDITORIA_LOGGING_TRANSVERSAL.md), [implementación 17](IMPLEMENTACION_17_MS_AUDIT_Y_BASE_DE_LOGS.md).
 
-14. **Integración climática ausente.** No encontré conexión con APIs de clima ni uso de datos meteorológicos para ajustar prioridad. La tesis la plantea como integración externa/diferencial de evolución, no como el bloqueo más inmediato del MVP.
+14. **Integración climática: ausente.** Diferencial de evolución, no bloqueo inmediato del MVP.
 
 ### Baja / documental
 
-15. **Documentación de alineamiento desactualizada.** El reporte previo de mayo afirma que Routing y Notifications faltan y que PostgreSQL diverge de MySQL. En el código actual existen `ms-routing` y `ms-notifications`; el PDF de tesis revisado especifica PostgreSQL y menciona MongoDB como posible complemento. La matriz de CORE 2-4 también refleja faltantes que ya tienen implementación parcial o endpoints actuales. Referencias: [reporte de alineamiento previo](REPORTE_ALINEAMIENTO_TESIS_VS_CODIGO.md), [bitácora CORE 2-4](CORE_2_3_4_AUDITORIA_SEGUIMIENTO.md), [resumen de arquitectura](TECHNICAL_ARCHITECTURE_SUMMARY.md).
+15. **Documentación histórica: depurada parcialmente.** Esta matriz refleja las implementaciones 01–15; revisar matrices CORE e informes previos que aún describan estados anteriores.
 
 ## 3. Coincidencias comprobadas
 
@@ -63,35 +63,33 @@ Este documento clasifica el grado de diferencia, no asigna un porcentaje global.
 - PostgreSQL para Auth, Reclamos, Routing y Notifications; es consistente con la versión de tesis revisada.
 - MS-AI integra OpenAI y usa Redis para estado conversacional; MS-Geo integra geocodificación de Google.
 - Reclamos dispone de creación, consulta, actualización, estados e historial; hay además revisión de resolución, nueva visita, cierre y reapertura en backend.
-- `ms-routing` implementa simulación/generación de planes, reglas, persistencia, asignación, rutas operativas, intervenciones y evidencia referenciada por URL; incluye estrategia local/Google Maps y fallback.
-- `ms-notifications` incluye idempotencia, persistencia de intentos, reintentos y estrategia WhatsApp, sujeta a credenciales, template aprobado y configuración.
-- Dashboard administrativo y sitio público existen; el dashboard incorpora vistas de reclamos, planes y rutas.
+- `ms-routing` implementa planificación municipal, reglas, asignación, operación y evidencias S3 privadas; las pruebas cruzadas usan dobles y las migraciones verificadas se compararon con Prisma.
+- `ms-notifications` incluye idempotencia, persistencia de intentos, reintentos y estrategia WhatsApp; la entrega real requiere credenciales, template Meta aprobado y conectividad.
+- Dashboard administrativo, panel municipal y sitio ciudadano existen; el formulario público carga categorías activas del catálogo.
 
 ## 4. Resultado de pruebas
 
-Pruebas ejecutadas sin conexión a bases de datos:
+Validaciones registradas en las entregas; estos resultados no equivalen a pruebas de producción:
 
 | Proyecto | Resultado |
 |---|---|
-| `ms-ai` | 10 suites y 50 pruebas aprobadas |
-| `ms-routing` | 5 suites y 31 pruebas aprobadas |
-| `ms-reclamos` | 1 suite aprobada; 1 prueba de integración omitida |
-| `ms-notifications` | 2 suites y 5 pruebas aprobadas; integración NATS omitida |
-| `admin-dashboard` | 4 archivos y 24 pruebas aprobadas |
-| `gateway` | Suite con fallos de inyección de dependencias de prueba (`NATS_CLIENT`) |
-| `ms-auth` | Suite con fallos de inyección de dependencias de prueba (`PrismaService`/`NATS_CLIENT`) |
+| `ms-ai` | 11 suites y 77 pruebas aprobadas; build aprobado |
+| `ms-routing` | 5 suites y 41 pruebas aprobadas; build aprobado |
+| `ms-reclamos` | 4 suites y 18 pruebas aprobadas; 1 prueba de integración omitida; build aprobado |
+| `ms-notifications` | Pruebas enfocadas WhatsApp: 2 suites y 7 pruebas; Meta/NATS real no ejecutado |
+| `admin-dashboard` | 7 archivos y 30 pruebas aprobadas; typecheck y build aprobados |
+| `gateway` | 6 suites enfocadas y 50 pruebas aprobadas; build aprobado. La suite general mantiene fallos preexistentes de inyección en fixtures genéricos |
+| `ms-auth` | Pruebas municipales enfocadas y build aprobados; la suite general mantiene fallos preexistentes de inyección (`PrismaService`/`NATS_CLIENT`) |
 | `ms-geo` | No define script `test` |
 
-No se habilitaron pruebas de integración con NATS, Redis o PostgreSQL. La revisión de los endpoints y flujos descritos es estática; el seguimiento público y el aislamiento territorial deben confirmarse con pruebas de integración una vez que exista un entorno de prueba seguro.
+Alta pública y UI se probaron con dobles/API interceptada; no se enviaron reclamos reales ni mensajes WhatsApp durante esas pruebas. Las migraciones de MS-Auth/MS-Routing sí se aplicaron en las bases autorizadas verificadas. Falta integrar Gateway, NATS, Redis, Google, S3 y Meta en staging. Repetir conteos al ejecutar una nueva tanda completa.
 
-## 5. Prioridad sugerida para cerrar brechas
+## 5. Próximos pasos priorizados
 
-1. Imponer aislamiento territorial desde el contexto autenticado y probar acceso cruzado entre municipios.
-2. Corregir y probar el contrato del seguimiento ciudadano, incluyendo verificación de identidad conforme al requisito.
-3. Completar el canal de alta web y el circuito de evidencias con almacenamiento externo y controles de acceso.
-4. Publicar eventos para todos los cambios comunicables y validar entrega real de WhatsApp en un entorno de prueba.
-5. Implementar detección de duplicados y reportes mínimos del MVP.
-6. Definir modelo de configuración municipal y completar despliegue, backups y pruebas de integración.
-7. Actualizar las matrices de documentación técnica una vez que cada brecha se cierre.
+1. **Contener secretos y PII en todos los logs:** eliminar connection strings, payloads y texto/destinatarios; aplicar allowlist y pruebas negativas por servicio.
+2. **Verificar el destino de auditoría:** localizar o implementar consumidor durable para `audit.log`; cubrir confirmación, reintentos, retención y alertas.
+3. **Prueba integrada de dos municipios en staging:** confirmar despliegues y variables; probar alta, seguimiento, planes y acceso cruzado con datos sintéticos.
+4. **WhatsApp real en sandbox:** template v2 aprobado, entrega y reintentos, transiciones y respuesta rápida sin duplicados.
+5. **Métricas mínimas y operación:** definir indicadores territoriales; demostrar backup restaurable, CI/CD, alertas y runbooks. Mantener documentada la discrepancia del checksum de `0_baseline`; no resolverla con reset ni reescritura del historial.
 
-**Estado de cambios:** este documento registra la auditoría; no se modificaron servicios ni datos del sistema durante su elaboración.
+**Estado de cambios:** se actualizó la matriz de hallazgos, validaciones y prioridades con el estado de las implementaciones 01–15. No se modificaron servicios ni datos durante esta actualización documental.
