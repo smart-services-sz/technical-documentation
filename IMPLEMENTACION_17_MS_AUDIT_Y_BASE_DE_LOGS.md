@@ -3,7 +3,7 @@
 **Fecha:** 16 de octubre de 2026  
 **Estado:** servicio, consulta y migracion implementados; esquema aplicado y smoke test real de escritura/lectura verificado en la base Railway proporcionada. Push pendiente de esta entrega; no se pudo confirmar un deploy Railway desde las herramientas disponibles.
 
-**Correccion de build Railway (16/10/2026):** el primer build detecto que el builder usaba Node 18.20.5, incompatible con Prisma 7.10.1 (requiere Node 20.19+, 22.12+ o 24+). Se fijo el runtime a Node 22.22.2 mediante `.node-version` y `engines.node`, se mantuvo Prisma CLI como dependencia de runtime para la migracion de arranque y se fuerza la instalacion de dependencias de desarrollo durante el build. Con el orden Railway `npm ci --include=dev`, `prisma generate`, tests y `nest build`, la validacion local pasa en Node 22.22.2.
+**Correcciones de build Railway (16/10/2026):** el primer build detecto Node 18.20.5, incompatible con Prisma 7.10.1; se fijo Node 22.22.2 mediante `.node-version` y `engines.node`, y Prisma CLI quedo como dependencia de runtime para migrate deploy. Un segundo intento reporto `EBUSY` porque el `npm ci` duplicado dentro de `buildCommand` intentaba borrar `/app/node_modules/.cache`, montado como cache por Railway. Nixpacks ya ejecuta la instalacion en su etapa previa; por eso el `buildCommand` queda solo con `prisma generate` y `nest build`. Se valido localmente esa secuencia con Node 22.22.2.
 
 ## Entrega
 
