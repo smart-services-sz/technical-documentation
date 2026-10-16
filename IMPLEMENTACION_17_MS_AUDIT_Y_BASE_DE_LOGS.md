@@ -1,7 +1,7 @@
 # Implementacion 17: MS-Audit y almacenamiento central de eventos
 
 **Fecha:** 16 de octubre de 2026  
-**Estado:** servicio, consulta y migracion implementados; esquema aplicado y smoke test real de escritura/lectura verificado en la base Railway proporcionada. Push pendiente de esta entrega; no se pudo confirmar un deploy Railway desde las herramientas disponibles.
+**Estado:** servicio y consulta implementados; migracion aplicada; smoke test real de escritura/lectura verificado con rollback. El usuario confirma el deploy de Railway. La verificacion posterior aun no observa eventos almacenados, por lo que falta confirmar la ingesta desde NATS.
 
 **Correcciones de build Railway (16/10/2026):** el primer build detecto Node 18.20.5, incompatible con Prisma 7.10.1; se fijo Node 22.22.2 mediante `.node-version` y `engines.node`, y Prisma CLI quedo como dependencia de runtime para migrate deploy. Un segundo intento reporto `EBUSY` porque el `npm ci` duplicado dentro de `buildCommand` intentaba borrar `/app/node_modules/.cache`, montado como cache por Railway. Nixpacks ya ejecuta la instalacion en su etapa previa; por eso el `buildCommand` queda solo con `prisma generate` y `nest build`. Se valido localmente esa secuencia con Node 22.22.2.
 
@@ -11,7 +11,7 @@ Se creo `ms-audit` como microservicio NestJS/Prisma 7 para recibir `audit.log` p
 
 El modelo conserva los campos de auditoria de MS-Auth y agrega `eventId`, `municipalityId` y `correlationId`. `eventId` es opcional y unico para compatibilidad; MS-Auth ahora emite un UUID por evento y el consumidor usa upsert para deduplicar reenvios con el mismo ID. La metadata se redacciona recursivamente por nombres de claves que aparentan contener secretos y se limita a 32 KB.
 
-Gateway expone `GET /api/audit/logs`, con rol `ADMIN`, filtros y paginacion de hasta 100 registros. No se agrego todavia una vista React en el dashboard.
+Gateway expone `GET /api/audit/logs`, con rol `ADMIN`, filtros y paginacion de hasta 100 registros. La entrega 18 agrega la vista React de Auditoria en el dashboard.
 
 ## Base y migracion
 
@@ -30,6 +30,7 @@ Se aplico `20261016110000_init_audit`. `prisma migrate deploy` termino correctam
 - `gateway/src/audit/` y `gateway/src/app.module.ts`: endpoint de consulta ADMIN y filtros.
 - `ms-auth/src/utils/audit.publisher.ts` y `.spec.ts`: `eventId` UUID y contexto territorial/correlacion opcional, compatible con el evento existente.
 - `technical-doc/IMPLEMENTACION_16_AUDITORIA_LOGGING_TRANSVERSAL.md`: inventario de riesgos y estrategia de redaccion.
+- `technical-doc/IMPLEMENTACION_18_AUDITORIA_TRANSVERSAL_Y_DASHBOARD.md`: instrumentacion HTTP/NATS y consulta en dashboard.
 
 ## Validacion
 
@@ -37,16 +38,17 @@ Se aplico `20261016110000_init_audit`. `prisma migrate deploy` termino correctam
 - Gateway: 2 pruebas del controlador ADMIN y build aprobados.
 - MS-Auth: prueba del publisher y build aprobados.
 - Base Railway: migracion aplicada, esquema sin drift; insert/read dentro de transaccion y rollback real aprobados.
-- No se conecto NATS productivo ni se hicieron pruebas de evento end-to-end.
+- Tras el deploy reportado, una consulta de solo lectura conto eventos agrupados por servicio: total cero. No se leyo metadata ni PII. Esto no distingue si aun no hubo una accion auditada o si falta conectar/verificar NATS.
+- No se ejecuto una prueba end-to-end de evento a traves de NATS.
 
 ## Configuracion y activacion
 
-En el servicio Railway `ms-audit` deben configurarse `DATABASE_URL` con la base proporcionada y `NATS_SERVERS` con el NATS privado compartido por MS-Auth y Gateway. No se guardo `DATABASE_URL` en `.env`, Railway config ni Git. El `railway.toml` ejecuta `npm ci`, genera Prisma, compila y, en start, ejecuta `prisma migrate deploy` antes de arrancar el microservicio. No incluye healthcheck HTTP porque MS-Audit es un consumidor NATS.
+En el servicio Railway `ms-audit` deben configurarse `DATABASE_URL` con la base proporcionada y `NATS_SERVERS` con el NATS privado compartido por los productores. No se guardo `DATABASE_URL` en `.env`, Railway config ni Git. Nixpacks instala dependencias; `buildCommand` ejecuta `prisma generate` y compila, y `startCommand` ejecuta `prisma migrate deploy` antes de arrancar. No incluye healthcheck HTTP porque MS-Audit es un consumidor NATS.
 
-El repositorio remoto `https://github.com/smart-services-sz/ms-audit.git` se comprobo accesible y vacio. Falta inicializar/publicar el codigo y confirmar que el servicio Railway este vinculado al repo. No hay herramienta de Railway disponible en este entorno para comprobar el estado final del deploy o cargar variables.
+El repositorio remoto `https://github.com/smart-services-sz/ms-audit.git` tiene el codigo publicado en `main`; el usuario informa que el deploy se realizo. No hay Railway CLI/proyecto vinculado en este entorno para inspeccionar las variables o los logs del proceso.
 
 ## Limite de entrega y proximo trabajo
 
-Solo los eventos que publican `audit.log` se persisten; hoy MS-Auth es el productor integrado. Los logs operativos de Nest en Gateway, MS-AI, Geo, Reclamos, Routing y Notifications siguen yendo a stdout, no a esta tabla. La API esta disponible para ADMIN, pero no se agrego UI.
+Solo los eventos que publican `audit.log` se persisten. MS-Auth tiene eventos de negocio y la entrega 18 añade eventos operativos HTTP/NATS en Gateway y los seis microservicios. La consulta ADMIN y la vista dashboard estan en codigo, pero falta confirmar el despliegue de esas versiones y su ingesta real.
 
-MS-Auth publica con NATS Core y fire-and-forget. Si MS-Audit esta caido o desconectado, NATS Core no conserva/reproduce el evento y no se puede afirmar entrega durable. Para garantizarla, evaluar JetStream con consumer durable/ack o transactional outbox; publicar un UUID no resuelve la perdida cuando el consumidor esta offline. Tambien falta desplegar MS-Audit, configurar NATS, verificar consumo real y migrar por fases los productores restantes siguiendo la politica de redaccion del informe 16.
+Los productores operativos publican con NATS Core y fire-and-forget. El conteo de la base era cero en la ultima consulta. Siguiente smoke test: confirmar que `NATS_SERVERS` en Gateway y todos los productores coincide con MS-Audit; ejecutar una accion auditada no sensible por servicio y comprobar que aumenta el conteo. Si no aumenta, inspeccionar logs de conexion/consumer sin volcar payloads. NATS Core no conserva/reproduce eventos si MS-Audit esta desconectado; evaluar JetStream durable/ack u outbox para garantizar entrega.

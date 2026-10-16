@@ -1,7 +1,7 @@
 # Implementacion 16: auditoria transversal de logging
 
 **Fecha:** 16 de octubre de 2026  
-**Estado:** analisis estatico y plan de trabajo; no se modifico codigo ni se desplegaron cambios.
+**Estado:** el analisis se implemento parcialmente en [la entrega 18](IMPLEMENTACION_18_AUDITORIA_TRANSVERSAL_Y_DASHBOARD.md): interceptores globales, saneamiento de logs sensibles y consulta ADMIN. Falta confirmar el despliegue/ingesta NATS real y resolver durabilidad.
 
 ## Objetivo
 
@@ -23,20 +23,14 @@ Es un inventario estatico de la version local al 16/10/2026. Los conteos de busq
 
 ### Secretos expuestos en logs de arranque
 
-- `ms-auth/src/main.ts` imprime `DATABASE_URL` completo con `console.log`. Si el valor contiene usuario/clave, termina en stdout.
-- `gateway/src/main.ts` imprime `NATS_SERVERS` y `REDIS_URL` completos.
-- `ms-ai/src/main.ts`, `ms-geo/src/main.ts`, `ms-notifications/src/main.ts`, `ms-reclamos/src/main.ts` y `ms-routing/src/main.ts` imprimen `NATS_SERVERS`. Una URL NATS puede contener credenciales.
+- `ms-auth/src/main.ts` imprimia `DATABASE_URL` completo; se retiro en la entrega 18.
+- `gateway/src/main.ts` imprimia `NATS_SERVERS` y `REDIS_URL` completos; ahora informa solo si estan configurados.
+- Los bootstraps de MS-AI, Geo, Notifications, Reclamos y Routing ya no imprimen URLs NATS completas.
 - No se debe solucionar esto ocultando parcialmente passwords con regex improvisada. El log de arranque debe registrar nombres de servicio, entorno, puerto/host no sensible y versiones, nunca connection strings, query strings ni tokens.
 
 ### Datos personales y contenido ciudadano
 
-- `ms-reclamos/src/reclamos/reclamos.controller.ts` escribe el payload completo de `reclamos.create` con `JSON.stringify`, que puede incluir telefono, correo, DNI, direccion, texto libre e historial de mensajes.
-- `ms-ai/src/ai-process/ai-process.service.ts` registra `contactKey` y `consolidatedText` sin redaccion. El texto puede incluir DNI, telefonos, correos, domicilios y detalles sensibles.
-- `gateway/src/inbound/inbound.service.ts` registra `contactKey`; ademas tiene una respuesta de MS-AI en nivel `debug`, que puede contener estado/contenido de conversacion.
-- `ms-reclamos/src/reclamos/reclamos.service.ts` y el controlador tambien incluyen `contactKey` al registrar la creacion.
-- `ms-geo/src/geo/geo.service.ts` registra direccion completa y coordenadas exactas. Direccion/ubicacion son datos personales cuando se vinculan al solicitante.
-- `ms-notifications/src/notifications/log-channel.strategy.ts` registra telefono destinatario y mensaje completo. Esta estrategia es el fallback configurado junto a WhatsApp, por lo que no es solo codigo de prueba.
-- `gateway/src/whatsapp/whatsapp.service.ts` registra el destinatario y errores de Meta sin una politica de saneamiento visible. Los errores externos deben limitarse a codigo, estado y referencia; no volcar cuerpos, headers ni URLs que puedan incluir tokens.
+- Esos puntos se sanearon en la entrega 18: payload completo, texto/contactKey, direccion/coordenadas, destinatario y cuerpo de error de proveedor ya no se escriben en logs de consola.
 
 ### Correlacion y formato
 
@@ -49,7 +43,7 @@ Es un inventario estatico de la version local al 16/10/2026. Los conteos de busq
 
 - MS-Auth publica eventos `audit.log` mediante `AuditPublisher`, usado en Auth, usuarios, roles, permisos y configuracion municipal. El envio es fire-and-forget (`emit`) y no espera confirmacion.
 - MS-Audit ya implementa consumidor NATS, persistencia PostgreSQL y consulta ADMIN; la migracion inicial fue aplicada y el esquema se verifico sin drift. La base no tiene aun eventos guardados y no hay validacion end-to-end con NATS productivo. NATS Core/fire-and-forget no retiene eventos si el consumidor esta offline.
-- El consumidor persiste solo `audit.log`: los logs operativos de otros servicios siguen en stdout y todavia no se conectan a esa base. La consulta esta expuesta en Gateway, pero no hay pantalla React.
+- La entrega 18 agrega interceptores operativos NATS en Gateway y los seis microservicios y una vista ADMIN en Dashboard. Estos productores estan en codigo local; falta confirmar que sus versiones desplegadas publiquen y que MS-Audit reciba los eventos.
 - Reclamos y Routing guardan historiales funcionales propios. No hay una correlacion central evidente entre cambio de usuario, reclamo, plan, ruta y entrega de notificacion.
 
 ### Cobertura de eventos incompleta
@@ -81,10 +75,10 @@ Niveles propuestos:
 
 ## Plan por fases
 
-1. **Contencion inmediata de secretos/PII:** eliminar `DATABASE_URL raw`, dejar de imprimir connection strings, quitar payload completo, texto conversacional, contacto, direccion/coordenadas y mensaje de notificacion. Sustituir por campos allowlist. Anadir pruebas que demuestren que secretos/PII no aparecen.
-2. **Contrato de correlacion compatible:** mantener `[correlationId]` y `key=value`; propagar un ID por HTTP/NATS, registrar inicio/final y duracion en limites Gateway/consumidor, incluir municipio y actor solo donde el contexto sea confiable.
-3. **Matriz de eventos por servicio:** Auth/usuarios, Reclamos, AI, Geo, Routing, Notifications, Gateway/webhooks y almacenamiento. Para cada operacion declarar evento de exito, fallo, campos permitidos y nivel.
-4. **Auditoria durable:** configurar y desplegar MS-Audit/NATS; definir consumer durable/ack o transactional outbox, reintentos, retencion, permisos y alarma por desconexion. No tratar un `emit` Core sin confirmacion como auditoria durable.
+1. **Contencion de secretos/PII:** implementada en codigo en la entrega 18 con allowlist y pruebas negativas. Falta verificar los logs del entorno desplegado y conservar pruebas de regresion.
+2. **Contrato de correlacion compatible:** interceptores HTTP/NATS implementados con prefijo y campos allowlist; municipio/actor se incluyen cuando vienen del contexto autenticado.
+3. **Matriz de eventos por servicio:** Gateway HTTP y handlers NATS de los seis microservicios instrumentados; faltan pruebas integradas y revisar procesos batch/background si se incorporan.
+4. **Auditoria durable:** MS-Audit ya persiste `audit.log` y el Dashboard permite consulta ADMIN. Definir consumer durable/ack JetStream u outbox, reintentos, retencion, permisos y alarma por desconexion; NATS Core `emit` no garantiza entrega.
 5. **Sanitizacion y defensa:** centralizar saneamiento de excepciones; cubrir tokens, passwords, connection strings, headers Authorization, query strings, cuerpos Meta/Google/S3 y datos ciudadanos. No depender solo de ocultar a nivel de plataforma.
 6. **Verificacion:** pruebas unitarias de redaccion y campos; test de correlacion HTTP→NATS; revision de logs en entorno de staging con datos sinteticos; validar retencion, acceso, busqueda y alertas. No enviar PII real para probar logs.
 
@@ -99,4 +93,4 @@ Niveles propuestos:
 
 ## Siguiente paso recomendado
 
-Empezar por la fase 1 en `ms-auth/src/main.ts`, `gateway/src/main.ts`, los demas bootstraps, `ms-reclamos`, `ms-ai`, `ms-geo` y `ms-notifications`; despues configurar NATS y probar el consumidor MS-Audit, fortalecer durabilidad y migrar productores por servicio. El alcance es transversal, por lo que conviene implementar y desplegar por fases, no reemplazar todos los loggers de una vez.
+La fase de contencion y cobertura en codigo se implemento en la entrega 18. Siguiente: desplegar productores, confirmar ingesta real con datos sinteticos y decidir JetStream/outbox; mantener el formato legible existente.

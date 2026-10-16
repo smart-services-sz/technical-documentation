@@ -38,7 +38,7 @@ Este documento clasifica el grado de diferencia, no asigna un porcentaje global.
 
 8. **Reportes e indicadores del dashboard: pendientes.** La sección de métricas sigue siendo placeholder. Definir primero indicadores mínimos, denominadores, filtros temporales/territoriales y autorización por municipio. Referencia: [dashboard administrativo](../admin-dashboard/src/components/admin-dashboard.tsx).
 
-9. **Secretos y PII en logs: riesgo transversal abierto.** MS-Auth imprime `DATABASE_URL`; los bootstraps publican URLs NATS/Redis; MS-Reclamos registra el payload completo; MS-AI/Gateway imprimen contacto/texto conversacional, MS-Geo dirección/coordenadas, y el canal `log` registra destinatario/mensaje. Debe aplicarse saneamiento con allowlist y pruebas negativas en todos los servicios. Inventario y plan: [implementación 16](IMPLEMENTACION_16_AUDITORIA_LOGGING_TRANSVERSAL.md).
+9. **Secretos y PII en logs: saneamiento implementado; verificar despliegue y regresiones.** La entrega 18 retiró connection strings, payloads, texto/contacto, direcciones/coordenadas, destinatarios y cuerpos de proveedor; añadió pruebas negativas e interceptores de metadata allowlist. Falta confirmar que todos los despliegues usan estas versiones y mantener pruebas de regresión. Referencias: [inventario](IMPLEMENTACION_16_AUDITORIA_LOGGING_TRANSVERSAL.md), [implementación 18](IMPLEMENTACION_18_AUDITORIA_TRANSVERSAL_Y_DASHBOARD.md).
 
 ### Media
 
@@ -48,7 +48,7 @@ Este documento clasifica el grado de diferencia, no asigna un porcentaje global.
 
 12. **Continuidad operativa: CI/CD, backups y despliegue reproducible por cerrar/verificar.** Hay Compose, pero no se evidenció automatización completa de backups y CI/CD. Confirmar Railway por servicio, restauración probada, alertas y runbooks; no inferir el estado de recursos gestionados sin revisar el entorno.
 
-13. **Auditoría central: persistencia implementada; despliegue y durabilidad pendientes.** MS-Audit consume `audit.log`, almacena en PostgreSQL y ofrece consulta ADMIN por Gateway; su migración ya se aplicó a la base Railway proporcionada y el esquema coincide con Prisma. MS-Auth es el único productor integrado actualmente. El envío usa NATS Core fire-and-forget, que puede perder eventos si el consumidor está desconectado; faltan deploy/configuración NATS, validación end-to-end, productores adicionales y durabilidad JetStream/outbox. Referencias: [implementación 16](IMPLEMENTACION_16_AUDITORIA_LOGGING_TRANSVERSAL.md), [implementación 17](IMPLEMENTACION_17_MS_AUDIT_Y_BASE_DE_LOGS.md).
+13. **Auditoría central: instrumentación y dashboard implementados; ingesta desplegada pendiente de confirmar.** La entrega 18 añade eventos operativos HTTP/NATS de Gateway y los seis microservicios, persistencia MS-Audit y vista ADMIN con filtros. Pruebas/build aprobados localmente. Falta desplegar Dashboard, Gateway y productores instrumentados, y confirmar que NATS compartido lleve una operación sintética de cada servicio a PostgreSQL. NATS Core `emit` no garantiza replay; JetStream/outbox queda pendiente. Referencias: [implementación 16](IMPLEMENTACION_16_AUDITORIA_LOGGING_TRANSVERSAL.md), [implementación 17](IMPLEMENTACION_17_MS_AUDIT_Y_BASE_DE_LOGS.md), [implementación 18](IMPLEMENTACION_18_AUDITORIA_TRANSVERSAL_Y_DASHBOARD.md).
 
 14. **Integración climática: ausente.** Diferencial de evolución, no bloqueo inmediato del MVP.
 
@@ -86,10 +86,10 @@ Alta pública y UI se probaron con dobles/API interceptada; no se enviaron recla
 
 ## 5. Próximos pasos priorizados
 
-1. **Contener secretos y PII en todos los logs:** eliminar connection strings, payloads y texto/destinatarios; aplicar allowlist y pruebas negativas por servicio.
-2. **Verificar el destino de auditoría:** localizar o implementar consumidor durable para `audit.log`; cubrir confirmación, reintentos, retención y alertas.
-3. **Prueba integrada de dos municipios en staging:** confirmar despliegues y variables; probar alta, seguimiento, planes y acceso cruzado con datos sintéticos.
-4. **WhatsApp real en sandbox:** template v2 aprobado, entrega y reintentos, transiciones y respuesta rápida sin duplicados.
-5. **Métricas mínimas y operación:** definir indicadores territoriales; demostrar backup restaurable, CI/CD, alertas y runbooks. Mantener documentada la discrepancia del checksum de `0_baseline`; no resolverla con reset ni reescritura del historial.
+1. **Verificar la ingesta desplegada:** desplegar Dashboard, Gateway y productores instrumentados; confirmar NATS común y un evento sintético/no sensible por servicio.
+2. **Asegurar durabilidad y retención:** decidir JetStream/outbox, ACK/reintentos, retención y alertas; revisar acceso a IP/User-Agent y metadata.
+3. **Prueba integrada de dos municipios:** alta, seguimiento, planes y acceso cruzado con datos sintéticos.
+4. **WhatsApp real en sandbox:** template v2, entrega/reintentos y respuesta rápida sin duplicados.
+5. **Métricas mínimas y operación:** indicadores territoriales, backup restaurable, CI/CD, alertas y runbooks. Mantener documentada la discrepancia del checksum de `0_baseline`; no usar reset ni reescribir historial.
 
-**Estado de cambios:** se actualizó la matriz de hallazgos, validaciones y prioridades con el estado de las implementaciones 01–15. No se modificaron servicios ni datos durante esta actualización documental.
+**Estado de cambios:** se actualizó la matriz de hallazgos, validaciones y prioridades con el estado de las implementaciones 01–18. No se modificaron servicios ni datos durante esta actualización documental.
