@@ -5,6 +5,8 @@
 
 **Correcciones de build Railway (16/10/2026):** el primer build detecto Node 18.20.5, incompatible con Prisma 7.10.1; se fijo Node 22.22.2 mediante `.node-version` y `engines.node`, y Prisma CLI quedo como dependencia de runtime para migrate deploy. Un segundo intento reporto `EBUSY` porque el `npm ci` duplicado dentro de `buildCommand` intentaba borrar `/app/node_modules/.cache`, montado como cache por Railway. Nixpacks ya ejecuta la instalacion en su etapa previa; por eso el `buildCommand` queda solo con `prisma generate` y `nest build`. Se valido localmente esa secuencia con Node 22.22.2.
 
+**Correccion de arranque Railway (16/10/2026):** el log `Function._resolveFilename` correspondia a `node dist/src/main.js`, pero Nest compila el entrypoint en `dist/main.js`. Se corrigieron `start`, `start:prod` y `railway.toml`; el build local confirma que `dist/main.js` existe y la configuracion ya no refiere la ruta antigua.
+
 ## Entrega
 
 Se creo `ms-audit` como microservicio NestJS/Prisma 7 para recibir `audit.log` por NATS y almacenar eventos en PostgreSQL. Se adapto la referencia de `C:\actas-be\ms-audit` al patron `@prisma/adapter-pg` usado por SmartService; no se copio su configuracion local ni se leyo su `.env`.
